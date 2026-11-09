@@ -1,0 +1,49 @@
+name: Backend CI
+
+on:
+  pull_request:
+    paths:
+      - "apps/backend/**"
+      - ".github/workflows/backend-ci.yml"
+  push:
+    branches: [main, staging]
+    paths:
+      - "apps/backend/**"
+      - ".github/workflows/backend-ci.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend-lint-and-test:
+    name: Backend Lint, Typecheck & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@887a942a15af3a7626099df99e897a18d9e5ab3a # v5.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: "apps/backend/uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run Ruff linter
+        run: uv run ruff check .
+
+      - name: Run Mypy typecheck
+        run: uv run mypy app
+
+      - name: Run Pytest suite
+        run: uv run pytest -v

@@ -122,4 +122,6 @@ docker build -t ws-translation/web:test ./apps/web
   - **NO AI Attribution / Co-Author**: STRICTLY FORBIDDEN to add `Co-Authored-By:` trailers, AI signatures, or any "Generated with..." taglines to commit messages or pull requests.
   - **NEVER Commit Brainstorming or Implementation Plans**: Files under `docs/superpowers/`, `docs/plans/`, or any brainstorming/implementation plan artifacts MUST NEVER be staged or committed to Git.
   - **Explicit Trigger**: Never run `git commit` or `git push` unless explicitly instructed by the user. Never use `git add .` (stage specific files only).
-- **Security**: Never hardcode or log secrets, tokens, or API keys.
+- **Security**:
+  - Never hardcode or log secrets, tokens, or API keys.
+  - In GitHub Actions workflows (`.github/workflows/*.yml`), ALWAYS pin third-party actions to a full 40-character commit SHA (with a version comment, e.g., `uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2`), never use mutable tags like `@v4` or `@v5`.
