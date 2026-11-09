@@ -119,6 +119,7 @@ docker build -t ws-translation/web:test ./apps/web
   - **Code Identifiers**: Write all variables, functions, classes, filenames, API paths, and JSON/DB keys in **English** (`snake_case` for Python, `camelCase` / `PascalCase` for TypeScript and JSON).
 - **Git & Commit Conventions**:
   - **Commit Messages**: ALWAYS write in **English** and strictly follow **Conventional Commits** (`<type>(<scope>): <subject>`, e.g., `feat(backend): add 10s micro-billing worker`, `fix(web): handle websocket handover event`, `docs(specs): update dynamodb schema`). Allowed types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`.
+  - **NO AI Attribution / Co-Author**: STRICTLY FORBIDDEN to add `Co-Authored-By:` trailers, AI signatures, or any "Generated with..." taglines to commit messages or pull requests.
   - **NEVER Commit Brainstorming or Implementation Plans**: Files under `docs/superpowers/`, `docs/plans/`, or any brainstorming/implementation plan artifacts MUST NEVER be staged or committed to Git.
   - **Explicit Trigger**: Never run `git commit` or `git push` unless explicitly instructed by the user. Never use `git add .` (stage specific files only).
 - **Security**: Never hardcode or log secrets, tokens, or API keys.
