@@ -29,4 +29,4 @@
 - [ ] PR title follows **Conventional Commits** (`<type>(<scope>): <subject>`)
 - [ ] Code comments and identifiers are in **English**
 - [ ] No secrets, credentials, or brainstorming/plan artifacts (`docs/superpowers/`, `docs/plans/`) are included
-- [ ] No AI attribution (`Co-Authored-By:` or `Generated with...`) is present in commits or PR description
+- [ ] No AI attribution or co-author trailers are present in commits or PR description
