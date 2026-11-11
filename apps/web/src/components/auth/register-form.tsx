@@ -128,6 +128,7 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
             id="fullName"
             name="fullName"
             type="text"
+            autoComplete="name"
             placeholder="Nguyễn Văn A"
             value={fullName}
             onChange={(e) => {
@@ -159,6 +160,7 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
             id="email"
             name="email"
             type="email"
+            autoComplete="email"
             placeholder="host@company.com"
             value={email}
             onChange={(e) => {
@@ -191,6 +193,7 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
               id="password"
               name="password"
               type={showPassword ? "text" : "password"}
+              autoComplete="new-password"
               placeholder="Tối thiểu 8 ký tự..."
               value={password}
               onChange={(e) => {
@@ -223,7 +226,7 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
 
         {/* Terms Agreement Checkbox */}
         <div className="space-y-1 text-left pt-1">
-          <label className="flex items-start gap-2.5 cursor-pointer text-xs text-muted-foreground">
+          <div className="flex items-start gap-2.5 text-xs text-muted-foreground">
             <input
               type="checkbox"
               id="agreeTerms"
@@ -234,7 +237,7 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
               }}
               className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary/20"
             />
-            <span>
+            <label htmlFor="agreeTerms" className="cursor-pointer">
               Tôi đồng ý với{" "}
               <Link href="/terms" className="font-semibold text-primary underline underline-offset-2">
                 Điều khoản Dịch vụ
@@ -244,8 +247,8 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
                 Chính sách Bảo mật
               </Link>{" "}
               của WS Translation.
-            </span>
-          </label>
+            </label>
+          </div>
           {errors.agreeTerms && (
             <p className="text-xs font-medium text-destructive">{errors.agreeTerms}</p>
           )}
