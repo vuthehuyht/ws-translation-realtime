@@ -84,6 +84,38 @@ jobs:
               if re.search(pat, body, flags=re.IGNORECASE | re.MULTILINE):
                   errors.append(f"Forbidden AI attribution detected in PR body matching '{pat}'.")
 
+          # 6. Forbid illegal ASCII control characters (e.g., \x00-\x08, \x0b-\x0c, \x0e-\x1f)
+          # PowerShell backtick escaping often inadvertently converts `a to ASCII 0x07 (Bell / ^G).
+          illegal_control_chars = [
+              c for c in body if ord(c) < 32 and c not in ("\n", "\r", "\t")
+          ]
+          if illegal_control_chars:
+              hex_codes = sorted({f"0x{ord(c):02x}" for c in illegal_control_chars})
+              errors.append(
+                  f"PR description contains illegal control character(s): {hex_codes}. "
+                  "This commonly occurs when PowerShell escape characters mangle backticks (e.g., `a -> ASCII 0x07 Bell). "
+                  "Always write PR descriptions to a file and pass via 'gh pr create/edit --body-file <file>'."
+              )
+
+          # 7. Forbid shell escape mangling artifacts in Markdown
+          shell_escape_patterns = [
+              (
+                  r"\\\^G",
+                  "Detected mangled PowerShell bell artifact ('\\^G'). Pass Markdown via --body-file instead of inline CLI strings.",
+              ),
+              (
+                  r"\\`",
+                  "Detected backslash-escaped backtick ('\\`'). Use standard raw Markdown backticks.",
+              ),
+              (
+                  r"\\/[a-zA-Z0-9_/-]+",
+                  "Detected unnecessary backslash-escaped forward slash (e.g., '\\/path').",
+              ),
+          ]
+          for pattern, msg in shell_escape_patterns:
+              if re.search(pattern, body):
+                  errors.append(f"Mangled shell escape sequence detected: {msg}")
+
           if errors:
               print("PR Validation Failed:")
               for err in errors:
