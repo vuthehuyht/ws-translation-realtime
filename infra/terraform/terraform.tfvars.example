@@ -1,0 +1,7 @@
+aws_region      = "ap-southeast-1"
+environment     = "dev"
+project_name    = "ws-translation"
+vpc_cidr        = "10.0.0.0/16"
+primary_az      = "ap-southeast-1a"
+secondary_az    = "ap-southeast-1b"
+redis_node_type = "cache.t4g.micro"
