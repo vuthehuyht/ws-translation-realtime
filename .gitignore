@@ -61,6 +61,23 @@ yarn-debug.log*
 yarn-error.log*
 
 # =============================================================================
+# Terraform Infrastructure (infra/terraform)
+# =============================================================================
+**/.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+*.tfvars
+!terraform.tfvars.example
+
+# =============================================================================
 # AWS CDK & Local Infrastructure (infra)
 # =============================================================================
 cdk.out/
