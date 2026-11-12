@@ -1,0 +1,7 @@
+aws_region            = "ap-southeast-1"
+aws_profile           = "admin" # Set your AWS CLI profile (e.g. admin)
+environment           = "local"
+project_name          = "ws-translation"
+devbox_instance_type  = "t4g.micro"
+override_allowed_cidr = "" # Leave blank to auto-detect your current public IP
+jwt_secret_key        = "local-dev-ephemeral-jwt-secret-key-32chars-min!!"

@@ -1,64 +1,108 @@
-# AWS Single-AZ Terraform Infrastructure
+# Multi-Environment Terraform Infrastructure
 
 Infrastructure as Code (IaC) for **Realtime Speech-to-Speech & Speech-to-Text Translation System** deployed on AWS Singapore (`ap-southeast-1`).
 
-## Architecture Highlights
+---
 
-1. **Single-AZ Optimization (`ap-southeast-1a`)**:
-   - Compute (`ECS Fargate`) and in-memory cache (`ElastiCache Redis`) reside in `ap-southeast-1a`.
-   - **$0 Cross-AZ Data Transfer** when continuously reading and writing audio streams.
-   - Internal Redis ring buffer latency `< 1ms`.
-2. **Serverless Fan-out for 1,000 Listeners**:
-   - AWS AppSync Events WebSocket Pub/Sub handles subtitle distribution without backend compute load.
-   - Amazon CloudFront + S3 with Origin Access Control (OAC) distributes TTS `.mp3` audio chunks globally.
-3. **High-Availability & Zero-Downtime Handover (`FR-602`)**:
-   - Minimum 2 ECS Tasks running per service with Deployment Circuit Breaker & Automatic Rollback.
-   - 120s Deregistration Delay on ALB Target Group and 120s `stopTimeout` on container definitions.
-4. **Serverless NoSQL Persistence**:
-   - 6 DynamoDB tables in `PAY_PER_REQUEST` On-Demand mode with automated 24-hour TTL on hot transcripts.
+## 1. Environments Overview
 
-## Module Directory Structure
+| Environment | Directory | Purpose | Architecture | Cost Profile |
+| :--- | :--- | :--- | :--- | :--- |
+| **`local`** | `environments/local/` | Developer machine connection for backend/web (`localhost`) | **Default VPC**: 1x EC2 `t4g.micro` (PostgreSQL 16 + Redis 7 + 2GB swap + IP whitelist), S3, Cognito, AppSync, IAM Dev Access Key. Auto-renders `.env.dev` and `.env.local`. | **~$3/month** |
+| **`dev`** | `environments/dev/` | Staging / Development running 100% on AWS | **Custom Single-AZ VPC**: RDS PostgreSQL 16 (`db.t4g.micro`), ElastiCache Redis 7 (`cache.t4g.micro`), ECS Fargate (`backend` + `web`), ALB, S3, Cognito, AppSync. | **~$35-$45/month** |
+| **`prod`** | `environments/prod/` | High-Availability Production running 100% on AWS | **Production-grade VPC**: RDS PostgreSQL 16 (Multi-AZ, KMS encryption, 7-day backups), ElastiCache Redis, ECS Fargate with CPU Autoscaling, ALB with AWS WAFv2 DDoS protection, S3 KMS, CloudWatch Alarms. | Pay-as-you-go |
+
+---
+
+## 2. Directory Structure
 
 ```text
 infra/terraform/
-├── main.tf                    # Root module orchestrating all infrastructure components
-├── variables.tf               # Global input variables
-├── outputs.tf                 # Key resource outputs (ALB DNS, ECR URLs, DynamoDB ARNs, etc.)
-├── terraform.tfvars.example   # Example variables for local/dev/prod environments
+├── environments/
+│   ├── local/                     # Local Dev-Connect Environment (Default VPC + DevBox EC2)
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   ├── templates/             # Auto-generates apps/backend/.env.dev & apps/web/.env.local
+│   │   └── terraform.tfvars.example
+│   │
+│   ├── dev/                       # Full Development Environment on AWS
+│   │   ├── main.tf
+│   │   ├── variables.tf
+│   │   ├── outputs.tf
+│   │   └── terraform.tfvars.example
+│   │
+│   └── prod/                      # High-Availability Production Environment on AWS
+│       ├── main.tf
+│       ├── variables.tf
+│       ├── outputs.tf
+│       └── terraform.tfvars.example
+│
 └── modules/
-    ├── vpc/                   # Single-AZ VPC, Subnets, IGW, NAT Gateway
-    ├── security/              # Least-privilege Security Groups
-    ├── ecr/                   # ECR Repositories for web & backend with 10-image lifecycle policy
-    ├── dynamodb/              # 6 On-Demand DynamoDB tables + GSIs + TTL
-    ├── redis/                 # ElastiCache Redis 7.1 Single-AZ node in ap-southeast-1a
-    ├── s3_cloudfront/         # S3 Media Bucket (24h TTS / 90d Transcript lifecycle) + CloudFront OAC
-    ├── cognito/               # Cognito User Pool & App Client for Host Auth
-    ├── appsync/               # AppSync Events WebSocket GraphQL API
-    ├── alb/                   # Application Load Balancer with WebSocket path-based routing
-    ├── iam/                   # ECS Execution Role and Backend Task Role with AI permissions
-    └── ecs/                   # ECS Fargate Cluster, Task Definitions, and Services
+    ├── dev_box_ec2/               # [NEW] 1x EC2 t4g.micro running PostgreSQL 16 & Redis 7 (Local Dev)
+    ├── rds/                       # [NEW] Amazon RDS PostgreSQL 16 (Dev & Prod)
+    ├── elasticache/               # ElastiCache Redis 7.1 Single-AZ node in ap-southeast-1a
+    ├── waf/                       # [NEW] AWS WAFv2 WebACL Rate Limiting & OWASP Protection (Prod)
+    ├── vpc/                       # Custom Single-AZ VPC in ap-southeast-1a
+    ├── security/                  # Least-privilege Security Groups
+    ├── ecr/                       # ECR Repositories for web & backend with 10-image lifecycle policy
+    ├── s3_cloudfront/             # S3 Media Bucket (24h TTS / 90d Transcript lifecycle) + CloudFront OAC
+    ├── cognito/                   # Cognito User Pool & App Client for Host Auth
+    ├── appsync/                   # AppSync Events WebSocket Pub/Sub API
+    ├── alb/                       # Application Load Balancer with WebSocket path-based routing
+    ├── iam/                       # ECS Execution Role and Backend Task Role with AI permissions
+    └── ecs/                       # ECS Fargate Cluster, Task Definitions, and Services
 ```
 
-## Quick Start
+---
 
-### 1. Initialize Terraform
+## 3. Quick Start Guide
+
+### A. Deploy `local` Environment (For Localhost Development)
+
 ```bash
-cd infra/terraform
+cd infra/terraform/environments/local
+
+# 1. Initialize
 terraform init
+
+# 2. Review plan (auto-detects your public IP for PostgreSQL/Redis whitelist)
+terraform plan
+
+# 3. Apply infrastructure & auto-render .env files
+terraform apply
+
+# The files `apps/backend/.env.dev` and `apps/web/.env.local` will be generated automatically!
 ```
 
-### 2. Format & Validate
+### B. Deploy `dev` Environment (Full AWS Staging)
+
 ```bash
-terraform fmt -recursive
-terraform validate
+cd infra/terraform/environments/dev
+terraform init
+terraform plan
+terraform apply
 ```
 
-### 3. Plan Deployment
+### C. Deploy `prod` Environment (Production AWS)
+
 ```bash
-terraform plan -var-file="terraform.tfvars"
+cd infra/terraform/environments/prod
+terraform init
+terraform plan
+terraform apply
 ```
 
-### 4. Apply
+---
+
+## 4. Verification & Linting
+
 ```bash
-terraform apply -var-file="terraform.tfvars"
+# Format check all Terraform files recursively
+terraform fmt -check -recursive infra/terraform
+
+# Validate each environment
+cd infra/terraform/environments/local && terraform validate
+cd ../dev && terraform validate
+cd ../prod && terraform validate
 ```

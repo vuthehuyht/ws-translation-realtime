@@ -10,8 +10,9 @@ variable "project_name" {
 }
 
 variable "dynamodb_table_arns" {
-  description = "List of DynamoDB table ARNs allowed for backend CRUD operations"
+  description = "List of DynamoDB table ARNs allowed for backend CRUD operations (optional)"
   type        = list(string)
+  default     = []
 }
 
 variable "s3_bucket_arn" {

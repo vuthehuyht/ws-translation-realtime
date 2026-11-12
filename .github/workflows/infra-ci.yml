@@ -19,13 +19,9 @@ permissions:
   contents: read
 
 jobs:
-  terraform-validate:
-    name: Terraform Format & Validate
+  terraform-fmt:
+    name: Terraform Format Check
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: infra/terraform
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -35,8 +31,28 @@ jobs:
         with:
           terraform_version: "1.10.5"
 
-      - name: Check formatting
-        run: terraform fmt -check -recursive
+      - name: Check recursive formatting
+        run: terraform fmt -check -recursive infra/terraform
+
+  terraform-validate:
+    name: Validate Environments (${{ matrix.environment }})
+    needs: terraform-fmt
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        environment: [local, dev, prod]
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/${{ matrix.environment }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: "1.10.5"
 
       - name: Initialize Terraform
         run: terraform init -backend=false

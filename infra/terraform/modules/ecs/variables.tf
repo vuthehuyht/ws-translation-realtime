@@ -80,34 +80,46 @@ variable "appsync_graphql_url" {
   type        = string
 }
 
+variable "database_url" {
+  description = "Async SQLAlchemy PostgreSQL connection string (optional)"
+  type        = string
+  default     = ""
+}
+
 variable "users_table_name" {
   description = "DynamoDB Users table name"
   type        = string
+  default     = ""
 }
 
 variable "wallets_table_name" {
   description = "DynamoDB Wallets table name"
   type        = string
+  default     = ""
 }
 
 variable "payment_transactions_table_name" {
   description = "DynamoDB PaymentTransactions table name"
   type        = string
+  default     = ""
 }
 
 variable "rooms_table_name" {
   description = "DynamoDB Rooms table name"
   type        = string
+  default     = ""
 }
 
 variable "room_transcripts_table_name" {
   description = "DynamoDB RoomTranscripts table name"
   type        = string
+  default     = ""
 }
 
 variable "usage_ledger_table_name" {
   description = "DynamoDB UsageLedger table name"
   type        = string
+  default     = ""
 }
 
 variable "web_desired_count" {

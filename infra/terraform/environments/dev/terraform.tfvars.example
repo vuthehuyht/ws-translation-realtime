@@ -1,0 +1,7 @@
+aws_region            = "ap-southeast-1"
+aws_profile           = "admin" # Set your AWS CLI profile (e.g. admin)
+environment           = "dev"
+project_name          = "ws-translation"
+db_instance_class     = "db.t4g.micro"
+web_desired_count     = 0 # Set to 0 for initial infra bootstrap before docker push
+backend_desired_count = 0 # Set to 0 for initial infra bootstrap before docker push

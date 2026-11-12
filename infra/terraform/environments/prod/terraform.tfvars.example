@@ -1,0 +1,7 @@
+aws_region            = "ap-southeast-1"
+environment           = "prod"
+project_name          = "ws-translation"
+db_instance_class     = "db.t4g.small"
+web_desired_count     = 2
+backend_desired_count = 2
+alert_email           = "admin@example.com"

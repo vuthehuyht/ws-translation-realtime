@@ -53,89 +53,92 @@ resource "aws_iam_policy" "backend_ai_and_data_policy" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      # Amazon Transcribe Streaming (WebSocket HTTP/2)
-      {
-        Sid    = "AllowTranscribeStreaming"
-        Effect = "Allow"
-        Action = [
-          "transcribe:StartStreamTranscriptionWebSocket"
-        ]
-        Resource = "*"
-      },
-      # Amazon Translate (Parallel N-Language MT)
-      {
-        Sid    = "AllowAmazonTranslate"
-        Effect = "Allow"
-        Action = [
-          "translate:TranslateText"
-        ]
-        Resource = "*"
-      },
-      # Amazon Polly Neural (Demand-Driven TTS)
-      {
-        Sid    = "AllowAmazonPolly"
-        Effect = "Allow"
-        Action = [
-          "polly:SynthesizeSpeech"
-        ]
-        Resource = "*"
-      },
-      # Amazon Bedrock (On-demand AI Meeting Summary via Claude 3.5 Haiku / Nova Lite)
-      {
-        Sid    = "AllowAmazonBedrock"
-        Effect = "Allow"
-        Action = [
-          "bedrock:InvokeModel"
-        ]
-        Resource = [
-          "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-haiku*",
-          "arn:aws:bedrock:*::foundation-model/amazon.nova-lite*"
-        ]
-      },
-      # DynamoDB: 6 Tables and GSIs CRUD
-      {
-        Sid    = "AllowDynamoDBCRUD"
-        Effect = "Allow"
-        Action = [
-          "dynamodb:GetItem",
-          "dynamodb:PutItem",
-          "dynamodb:UpdateItem",
-          "dynamodb:DeleteItem",
-          "dynamodb:Query",
-          "dynamodb:Scan",
-          "dynamodb:BatchWriteItem",
-          "dynamodb:BatchGetItem"
-        ]
-        Resource = var.dynamodb_table_arns
-      },
-      # S3: Media bucket read, write, and presigned URLs
-      {
-        Sid    = "AllowS3MediaOperations"
-        Effect = "Allow"
-        Action = [
-          "s3:GetObject",
-          "s3:PutObject",
-          "s3:DeleteObject",
-          "s3:ListBucket"
-        ]
-        Resource = [
-          var.s3_bucket_arn,
-          "${var.s3_bucket_arn}/*"
-        ]
-      },
-      # AppSync: Publish subtitle events
-      {
-        Sid    = "AllowAppSyncPublish"
-        Effect = "Allow"
-        Action = [
-          "appsync:GraphQL"
-        ]
-        Resource = [
-          "${var.appsync_api_arn}/*"
-        ]
-      }
-    ]
+    Statement = concat(
+      [
+        # Amazon Transcribe Streaming (WebSocket HTTP/2)
+        {
+          Sid    = "AllowTranscribeStreaming"
+          Effect = "Allow"
+          Action = [
+            "transcribe:StartStreamTranscriptionWebSocket"
+          ]
+          Resource = "*"
+        },
+        # Amazon Translate (Parallel N-Language MT)
+        {
+          Sid    = "AllowAmazonTranslate"
+          Effect = "Allow"
+          Action = [
+            "translate:TranslateText"
+          ]
+          Resource = "*"
+        },
+        # Amazon Polly Neural (Demand-Driven TTS)
+        {
+          Sid    = "AllowAmazonPolly"
+          Effect = "Allow"
+          Action = [
+            "polly:SynthesizeSpeech"
+          ]
+          Resource = "*"
+        },
+        # Amazon Bedrock (On-demand AI Meeting Summary via Claude 3.5 Haiku / Nova Lite)
+        {
+          Sid    = "AllowAmazonBedrock"
+          Effect = "Allow"
+          Action = [
+            "bedrock:InvokeModel"
+          ]
+          Resource = [
+            "arn:aws:bedrock:*::foundation-model/anthropic.claude-3-5-haiku*",
+            "arn:aws:bedrock:*::foundation-model/amazon.nova-lite*"
+          ]
+        },
+        # S3: Media bucket read, write, and presigned URLs
+        {
+          Sid    = "AllowS3MediaOperations"
+          Effect = "Allow"
+          Action = [
+            "s3:GetObject",
+            "s3:PutObject",
+            "s3:DeleteObject",
+            "s3:ListBucket"
+          ]
+          Resource = [
+            var.s3_bucket_arn,
+            "${var.s3_bucket_arn}/*"
+          ]
+        },
+        # AppSync: Publish subtitle events
+        {
+          Sid    = "AllowAppSyncPublish"
+          Effect = "Allow"
+          Action = [
+            "appsync:GraphQL"
+          ]
+          Resource = [
+            "${var.appsync_api_arn}/*"
+          ]
+        }
+      ],
+      length(var.dynamodb_table_arns) > 0 ? [
+        {
+          Sid    = "AllowDynamoDBCRUD"
+          Effect = "Allow"
+          Action = [
+            "dynamodb:GetItem",
+            "dynamodb:PutItem",
+            "dynamodb:UpdateItem",
+            "dynamodb:DeleteItem",
+            "dynamodb:Query",
+            "dynamodb:Scan",
+            "dynamodb:BatchWriteItem",
+            "dynamodb:BatchGetItem"
+          ]
+          Resource = var.dynamodb_table_arns
+        }
+      ] : []
+    )
   })
 }
 

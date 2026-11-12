@@ -103,6 +103,7 @@ resource "aws_ecs_task_definition" "backend" {
       environment = [
         { name = "ENV", value = var.environment },
         { name = "AWS_DEFAULT_REGION", value = var.aws_region },
+        { name = "DATABASE_URL", value = var.database_url },
         { name = "REDIS_URL", value = var.redis_url },
         { name = "S3_MEDIA_BUCKET", value = var.s3_bucket_name },
         { name = "APPSYNC_GRAPHQL_URL", value = var.appsync_graphql_url },
