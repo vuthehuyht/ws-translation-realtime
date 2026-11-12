@@ -35,21 +35,20 @@ ws-translation-realtime/
 │       │   ├── main.py               # Unified FastAPI Entrypoint (/api/v1/* + /ws/v1/* + Async Workers)
 │       │   ├── api/v1/               # FastAPI Routers (auth, rooms, transcripts, wallets, webhooks)
 │       │   ├── ws/                   # WebSocket Audio Ingest & Graceful Handover Handler
-│       │   ├── workers/              # Asyncio Background Tasks (chạy trực tiếp trong tiến trình FastAPI)
-│       │   │   ├── billing_loop.py   # Chu kỳ chốt cước vi mô mỗi 10s (Redis INCRBYFLOAT + DynamoDB Ledger)
+│       │   ├── workers/              # Asyncio Background Tasks (Billing worker & S3 Export task)
+│       │   │   ├── billing_loop.py   # Chu kỳ chốt cước vi mô mỗi 10s (Redis + PostgreSQL UsageLedger)
 │       │   │   └── export_task.py    # Đóng gói .txt/.srt/.vtt/.csv lên S3 ngay khi END_ROOM
-│       │   ├── services/             # Async Services (aioboto3, amazon-transcribe, redis.asyncio)
-│       │   │   ├── stt_stream.py     # Amazon Transcribe HTTP/2 Bi-directional Stream
-│       │   │   ├── translator.py     # Parallel N-Language Amazon Translate + Debounce 300ms
-│       │   │   ├── tts_polly.py      # Demand-driven Amazon Polly Neural -> S3/CDN
-│       │   │   └── ai_summary.py     # Amazon Bedrock (Claude 3.5 Haiku / Nova Lite) Summarizer
+│       │   ├── services/             # Business Logic (auth, rooms, billing, transcripts)
+│       │   ├── integrations/         # AWS Clients (Cognito, S3, Transcribe, Translate, Polly, Bedrock, AppSync)
+│       │   ├── models/               # SQLAlchemy 2.0 ORM Models (9 PostgreSQL Tables)
 │       │   ├── schemas/              # Pydantic v2 Models (Request/Response & WebSocket Events)
-│       │   └── repositories/         # DynamoDB & Redis Async Repositories
+│       │   └── core/                 # config.py, db.py (asyncpg engine), security.py, exceptions.py
+│       ├── alembic/                  # Database Migrations (Alembic + asyncpg)
 │       ├── tests/                    # Pytest-asyncio suite (chạy trong bước CI)
 │       └── pyproject.toml
 │
-├── infra/                            # AWS CDK (VPC Single-AZ, ALB, 2 ECR Repos, 2 ECS Services, Redis, DynamoDB)
-└── docker-compose.yml                # Chạy local toàn bộ stack: web + backend + redis + dynamodb-local
+├── infra/                            # Terraform Multi-Environment Stacks (dev, staging, prod)
+└── docker-compose.yml                # Chạy local toàn bộ stack: web + backend + redis + postgres
 ```
 
 ---
@@ -81,7 +80,7 @@ Toàn bộ các endpoint của Host yêu cầu Header `Authorization: Bearer <Co
 
 | Method | Endpoint | Quyền | Mô tả & Payload chính |
 | :---: | :--- | :---: | :--- |
-| `GET` | `/api/v1/rooms/{roomId}/transcripts` | Host / Listener | **Đồng bộ lịch sử phụ đề** khi vào phòng muộn hoặc F5 trang (`FR-402`).<br>- **Query**: `?lang=ja-JP&afterSeq=0&limit=200`<br>- **Response (`200`)**: Danh sách các câu `Final` lấy từ DynamoDB `RoomTranscripts` (nếu trong 24h) hoặc từ `master.json` trên S3. |
+| `GET` | `/api/v1/rooms/{roomId}/transcripts` | Host / Listener | **Đồng bộ lịch sử phụ đề** khi vào phòng muộn hoặc F5 trang (`FR-402`).<br>- **Query**: `?lang=ja-JP&afterSeq=0&limit=200`<br>- **Response (`200`)**: Danh sách các câu `Final` lấy từ Redis live buffer (khi phòng đang ACTIVE) hoặc từ `master.json` trên S3 (khi phòng đã kết thúc). |
 | `GET` | `/api/v1/rooms/{roomId}/transcripts/export` | Host / Listener* | **Tải file biên bản dịch** (`FR-406`). *(Listener chỉ tải được nếu `allowListenerDownload == true`)*.<br>- **Query**: `?format=srt|vtt|txt|md|csv&lang=ja-JP`<br>- **Response (`200`)**: `{"downloadUrl": "https://s3.../presigned-url...", "expiresInSec": 3600}` |
 | `POST` | `/api/v1/rooms/{roomId}/summary` | **Chỉ Host** | **Kích hoạt AI Tóm tắt Nội dung** qua Amazon Bedrock (`FR-407`).<br>- Nếu đã có (`summaryStatus == READY`): Trả về ngay bản tóm tắt, không trừ tiền.<br>- Nếu chưa có: Gọi Bedrock sinh tóm tắt đa ngôn ngữ, lưu S3 `summary.json`, trừ phí 1 lần vào ví Host.<br>- **Response (`200`)**: Xem cấu trúc JSON ở **Mục 3.4**. |
 | `GET` | `/api/v1/rooms/{roomId}/summary` | Host / Listener* | **Xem bản Tóm tắt AI đã tạo** (`?lang=vi-VN`). Trả về `404` nếu Host chưa từng bấm tạo tóm tắt cho phòng này. |
@@ -91,7 +90,7 @@ Toàn bộ các endpoint của Host yêu cầu Header `Authorization: Bearer <Co
 | Method | Endpoint | Quyền | Mô tả & Payload chính |
 | :---: | :--- | :---: | :--- |
 | `POST` | `/api/v1/wallets/topup` | Host | **Tạo lệnh nạp tiền** (`FR-501`).<br>- **Body**: `{"amountUsd": 50.0, "provider": "STRIPE" | "VIETQR"}`<br>- **Response (`201`)**: `{"transactionId": "tx_01J...", "checkoutUrl": "https://...", "qrCodeDataUrl": "data:image/png;base64,..."}` |
-| `POST` | `/api/v1/webhooks/payment/{provider}` | Webhook | Nhận kết quả thanh toán từ Stripe / VietQR / SePay (`FR-502`). Kiểm tra HMAC Signature + Idempotency -> Cộng tiền vào DynamoDB `Wallets` và Redis `wallet:{hostId}:balance`. |
+| `POST` | `/api/v1/webhooks/payment/{provider}` | Webhook | Nhận kết quả thanh toán từ Stripe / VietQR / SePay (`FR-502`). Kiểm tra HMAC Signature + Idempotency -> Cộng tiền vào PostgreSQL `wallets` và Redis `wallet:{hostId}:balance`. |
 | `PUT` | `/api/v1/wallets/auto-topup` | Host | Cấu hình tự động nạp tiền (`FR-503`): `{"enabled": true, "thresholdUsd": 5.0, "amountUsd": 20.0, "paymentMethodId": "pm_..."}` |
 | `GET` | `/api/v1/wallets/transactions` | Host | Lịch sử nạp tiền, trừ tiền theo phiên và tải hóa đơn PDF/CSV (`FR-508`). |
 

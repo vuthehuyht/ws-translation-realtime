@@ -147,34 +147,121 @@ Speaker Client gửi các frame âm thanh mỗi `100ms` (PCM 16kHz, 16-bit, Mono
 | `room:{roomId}:tts_count` | `HASH` | 12h | Lưu số người nghe đang bật loa theo từng ngôn ngữ (ví dụ: `{"en-US": 42, "ja-JP": 15, "ko-KR": 0}`). Worker đọc key này trước khi gọi Polly. |
 | `wallet:{hostId}:balance` | `STRING` (Float) | 24h | Số dư ví theo thời gian thực của Host, được trừ nguyên tử bằng lệnh `INCRBYFLOAT` mỗi 10 giây. |
 
-### 3.3. Thiết kế Bảng trên Amazon DynamoDB (On-Demand Mode)
+### 3.3. Thiết kế Cơ sở Dữ liệu Quan hệ trên PostgreSQL 16 (ACID & S3 Offload)
 
-1. **Bảng `Users` (Đồng bộ từ Amazon Cognito Post-Confirmation Trigger)**:
-   - **Partition Key (`PK`)**: `userId` (String — chính là `sub` từ Cognito User Pool)
-   - **Global Secondary Index (`GSI-Email`)**: `email` (PK)
-   - **Thuộc tính**: `fullName`, `email`, `avatarUrl`, `defaultSourceLang`, `billingCompanyInfo` (Map: Tên công ty, MST, Địa chỉ), `stripeCustomerId`, `status` (`ACTIVE` | `SUSPENDED`), `createdAt`.
-2. **Bảng `Wallets`**:
-   - **Partition Key (`PK`)**: `hostId` (String — liên kết 1-1 với `userId`)
-   - **Thuộc tính**: `balance` (Number), `currency` (`USD`), `autoDegradeTts` (Boolean), `autoTopupEnabled` (Boolean), `autoTopupThreshold` (Number, ví dụ `$5`), `autoTopupAmount` (Number, ví dụ `$20`), `defaultPaymentMethodId`, `updatedAt`.
-3. **Bảng `PaymentTransactions` (Lịch sử Nạp tiền, Khuyến mãi & Hoàn tiền)**:
-   - **Partition Key (`PK`)**: `transactionId` (String — UUID / Payment Gateway ID để đảm bảo Idempotency)
-   - **Global Secondary Index (`GSI-HostPayments`)**: `hostId` (PK) + `createdAt` (SK)
-   - **Thuộc tính**: `type` (`TOP_UP` | `AUTO_TOP_UP` | `PROMO_CREDIT` | `REFUND`), `provider` (`STRIPE` | `VIETQR` | `VNPAY` | `SYSTEM`), `amount` (Number), `status` (`PENDING` | `SUCCEEDED` | `FAILED`), `invoicePdfUrl`, `rawWebhookMeta`, `createdAt`, `completedAt`.
-4. **Bảng `Rooms`**:
-   - **Partition Key (`PK`)**: `roomId` (String)
-   - **Global Secondary Index (`GSI-HostRooms`)**: `hostId` (PK) + `createdAt` (SK)
-   - **Global Secondary Index (`GSI-RoomCode`)**: `roomCode` (PK)
-   - **Thuộc tính**: `mode` (`1_ON_1` | `BROADCAST`), `sourceLang`, `targetLangs`, `allowListenerDownload` (Boolean), `status` (`CREATED` | `ACTIVE` | `PAUSED` | `ENDED`), `transcriptStatus` (`PENDING` | `PROCESSING` | `READY`), `transcriptS3Prefix` (String), `summaryStatus` (`NONE` | `GENERATING` | `READY`), `summaryS3Key` (String), `summaryCost` (Number), `totalCost`, `totalDurationSec`, `createdAt`, `endedAt`.
-5. **Bảng `RoomTranscripts` (Lưu trữ nóng các câu đã chốt phục vụ xem lại trong phiên & tổng hợp cuối buổi)**:
-   - **Partition Key (`PK`)**: `roomId` (String)
-   - **Sort Key (`SK`)**: `seqStart` (Number — Thứ tự frame bắt đầu của câu để sắp xếp chuẩn xác theo thời gian)
-   - **Time-to-Live (`TTL`)**: `expiresAt` (Epoch seconds = `createdAt + 24 giờ` — DynamoDB tự động dọn dẹp miễn phí sau 24h)
-   - **Thuộc tính**: `segmentId` (String), `speakerId` (String), `startTimeMs` (Number), `endTimeMs` (Number), `sourceLang` (String), `sourceText` (String), `translations` (Map: `{"en-US": "...", "vi-VN": "...", "ja-JP": "..."}`).
-6. **Bảng `UsageLedger` (Sổ cái tính cước vi mô bất biến mỗi 10s)**:
-   - **Partition Key (`PK`)**: `roomId` (String)
-   - **Sort Key (`SK`)**: `windowTimestamp` (Number - Epoch ms của mỗi chu kỳ 10s)
-   - **Global Secondary Index (`GSI-HostLedger`)**: `hostId` (PK) + `windowTimestamp` (SK)
-   - **Thuộc tính**: `audioSeconds`, `translatedChars`, `ttsChars`, `listenerCount`, `costAmount`, `balanceAfter`.
+Cơ sở dữ liệu chính của hệ thống được chuyển từ NoSQL sang **PostgreSQL 16**, kết nối bất đồng bộ qua **SQLAlchemy 2.0 Async (`asyncpg`)** và quản lý di trú lược đồ qua **Alembic**:
+
+1. **Bảng `users` (Tài khoản người dùng cốt lõi, đồng bộ từ Cognito `sub`)**:
+   - `id`: UUID (Primary Key, khớp `sub` của Cognito User Pool)
+   - `email`: VARCHAR(255) UNIQUE NOT NULL (Indexed)
+   - `role`: VARCHAR(20) NOT NULL DEFAULT 'HOST' (`HOST` | `ADMIN`)
+   - `status`: VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' (`ACTIVE` | `SUSPENDED`)
+   - `created_at` / `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+2. **Bảng `user_profiles` (Hồ sơ cá nhân & cài đặt chi tiết của Host)**:
+   - `id`: UUID (Primary Key)
+   - `user_id`: UUID UNIQUE NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
+   - `full_name`: VARCHAR(255) NOT NULL
+   - `phone_number`: VARCHAR(50) NULL
+   - `avatar_url`: VARCHAR(1024) NULL
+   - `timezone`: VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh'
+   - `default_source_lang`: VARCHAR(10) NOT NULL DEFAULT 'vi-VN'
+   - `default_target_langs`: JSONB NOT NULL DEFAULT '["en-US"]'
+   - `company_name`: VARCHAR(255) NULL
+   - `tax_code`: VARCHAR(50) NULL
+   - `company_address`: VARCHAR(500) NULL
+   - `bio`: TEXT NULL
+   - `stripe_customer_id`: VARCHAR(255) NULL
+   - `preferences`: JSONB NOT NULL DEFAULT '{}'
+   - `created_at` / `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+3. **Bảng `wallets` (Số dư tài chính & Cấu hình nạp tự động)**:
+   - `id`: UUID (Primary Key)
+   - `host_id`: UUID UNIQUE NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
+   - `balance`: NUMERIC(12, 4) NOT NULL DEFAULT 0.0000 (Ràng buộc `CHECK (balance >= 0)`)
+   - `currency`: VARCHAR(3) NOT NULL DEFAULT 'USD'
+   - `auto_degrade_tts`: BOOLEAN NOT NULL DEFAULT FALSE
+   - `auto_topup_enabled`: BOOLEAN NOT NULL DEFAULT FALSE
+   - `auto_topup_threshold`: NUMERIC(10, 2) NULL (ví dụ `$5.00`)
+   - `auto_topup_amount`: NUMERIC(10, 2) NULL (ví dụ `$20.00`)
+   - `default_payment_method_id`: VARCHAR(255) NULL
+   - `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+4. **Bảng `payment_transactions` (Lịch sử Nạp tiền, Khuyến mãi & Hoàn tiền)**:
+   - `id`: UUID (Primary Key)
+   - `host_id`: UUID NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
+   - `transaction_id`: VARCHAR(255) UNIQUE NOT NULL (Stripe PaymentIntent ID / VietQR tx_id bảo đảm Idempotency)
+   - `type`: VARCHAR(30) NOT NULL (`TOP_UP` | `AUTO_TOP_UP` | `PROMO_CREDIT` | `REFUND`)
+   - `provider`: VARCHAR(30) NOT NULL (`STRIPE` | `VIETQR` | `VNPAY` | `SYSTEM`)
+   - `amount`: NUMERIC(10, 2) NOT NULL
+   - `currency`: VARCHAR(3) NOT NULL DEFAULT 'USD'
+   - `status`: VARCHAR(20) NOT NULL DEFAULT 'PENDING' (`PENDING` | `SUCCEEDED` | `FAILED`)
+   - `invoice_pdf_url`: VARCHAR(1024) NULL
+   - `raw_webhook_meta`: JSONB NULL
+   - `created_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   - `completed_at`: TIMESTAMPTZ NULL
+   - Index trên `(host_id, created_at DESC)`
+
+5. **Bảng `custom_vocabularies` (Từ điển chuyên ngành của Host cho Transcribe & Translate - `FR-206`)**:
+   - `id`: UUID (Primary Key)
+   - `host_id`: UUID NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
+   - `name`: VARCHAR(100) NOT NULL
+   - `language_code`: VARCHAR(10) NOT NULL
+   - `terms`: JSONB NOT NULL DEFAULT '[]'
+   - `created_at` / `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+6. **Bảng `promo_codes` & `promo_redemptions` (Quản lý Voucher & Credit dùng thử - `FR-509`)**:
+   - `promo_codes`: `id` (UUID PK), `code` (VARCHAR UNIQUE), `credit_amount` (NUMERIC(10, 2)), `max_uses` (INT), `current_uses` (INT), `expires_at` (TIMESTAMPTZ), `is_active` (BOOL), `created_at`.
+   - `promo_redemptions`: `id` (UUID PK), `promo_code_id` (FK), `user_id` (FK), `credit_applied` (NUMERIC(10, 2)), `redeemed_at` (TIMESTAMPTZ). `UNIQUE(promo_code_id, user_id)` ngăn chặn gian lận nhận 2 lần.
+
+7. **Bảng `rooms` (Phiên hội thảo/cuộc họp)**:
+   - `id`: UUID (Primary Key)
+   - `host_id`: UUID NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
+   - `room_code`: VARCHAR(16) UNIQUE NOT NULL (Indexed)
+   - `title`: VARCHAR(255) NOT NULL DEFAULT 'Untitled Meeting'
+   - `mode`: VARCHAR(20) NOT NULL DEFAULT 'BROADCAST' (`1_ON_1` | `BROADCAST`)
+   - `source_lang`: VARCHAR(10) NOT NULL DEFAULT 'en-US'
+   - `target_langs`: JSONB NOT NULL DEFAULT '[]'
+   - `password_hash`: VARCHAR(255) NULL (Bảo vệ phòng riêng tư)
+   - `max_listeners`: INTEGER NOT NULL DEFAULT 1000
+   - `vocabulary_id`: UUID NULL (FK $\rightarrow$ `custom_vocabularies.id`)
+   - `allow_listener_download`: BOOLEAN NOT NULL DEFAULT TRUE
+   - `status`: VARCHAR(20) NOT NULL DEFAULT 'CREATED' (`CREATED` | `ACTIVE` | `PAUSED` | `ENDED`)
+   - `total_cost`: NUMERIC(10, 4) NOT NULL DEFAULT 0.0000
+   - `total_duration_sec`: INTEGER NOT NULL DEFAULT 0
+   - `created_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   - `started_at` / `ended_at`: TIMESTAMPTZ NULL
+   - Index trên `(host_id, created_at DESC)`
+
+8. **Bảng `room_transcripts` (Metadata và Khóa đối tượng S3 - Tránh quá tải DB)**:
+   - `id`: UUID (Primary Key)
+   - `room_id`: UUID UNIQUE NOT NULL (FK $\rightarrow$ `rooms.id` ON DELETE CASCADE)
+   - `status`: VARCHAR(20) NOT NULL DEFAULT 'PENDING' (`PENDING` | `PROCESSING` | `READY` | `FAILED`)
+   - `master_json_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/master.json`)
+   - `export_txt_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/transcript.txt`)
+   - `export_srt_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/subtitles.srt`)
+   - `export_vtt_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/subtitles.vtt`)
+   - `export_csv_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/transcript.csv`)
+   - `summary_status`: VARCHAR(20) NOT NULL DEFAULT 'NONE' (`NONE` | `GENERATING` | `READY` | `FAILED`)
+   - `summary_s3_key`: VARCHAR(1024) NULL (`summaries/{roomId}/summary.json`)
+   - `summary_cost`: NUMERIC(10, 4) NOT NULL DEFAULT 0.0000
+   - `total_segments`: INTEGER NOT NULL DEFAULT 0
+   - `file_size_bytes`: BIGINT NOT NULL DEFAULT 0
+   - `created_at` / `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+
+9. **Bảng `usage_ledger` (Sổ cái tính cước vi mô bất biến mỗi 10 giây)**:
+   - `id`: UUID (Primary Key)
+   - `room_id`: UUID NOT NULL (FK $\rightarrow$ `rooms.id` ON DELETE CASCADE)
+   - `host_id`: UUID NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
+   - `window_timestamp`: TIMESTAMPTZ NOT NULL (Mốc 10s)
+   - `audio_seconds`: NUMERIC(6, 2) NOT NULL DEFAULT 0
+   - `translated_chars`: INTEGER NOT NULL DEFAULT 0
+   - `tts_chars`: INTEGER NOT NULL DEFAULT 0
+   - `listener_count`: INTEGER NOT NULL DEFAULT 0
+   - `cost_amount`: NUMERIC(10, 4) NOT NULL DEFAULT 0.0000
+   - `balance_after`: NUMERIC(12, 4) NOT NULL
+   - `created_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+   - Index trên `(room_id, window_timestamp DESC)`, Index trên `(host_id, window_timestamp DESC)`
 
 ---
 
@@ -214,7 +301,7 @@ Speaker Client gửi các frame âm thanh mỗi `100ms` (PCM 16kHz, 16-bit, Mono
 | **Machine Translation (MT)** | **Amazon Translate** | Real-time Text Translation API, tính phí theo số ký tự dịch. |
 | **Text-to-Speech (TTS)** | **Amazon Polly (Neural Engine)** | `SynthesizeSpeech` API trả về luồng `mp3`/`ogg_vorbis`, tính phí theo số ký tự tổng hợp giọng nói. |
 | **AI Meeting Summary (LLM)** | **Amazon Bedrock** (`Claude 3.5 Haiku` / `Amazon Nova Lite`) | Gọi On-Demand khi Host bấm nút *"Tóm tắt nội dung AI"*, tính phí theo Input/Output Tokens và lưu cache kết quả trên S3 trong 90 ngày. |
-| **NoSQL Database** | **Amazon DynamoDB** | Chế độ **On-Demand (Pay-per-request)**, không tốn phí duy trì khi không có phòng hoạt động. |
+| **Primary Relational DB** | **Amazon RDS for PostgreSQL / Aurora Serverless v2** (Local: **PostgreSQL 16 Docker**) | Cơ sở dữ liệu quan hệ ACID chính (9 bảng), kết nối qua asyncpg & SQLAlchemy 2.0, migration qua Alembic. |
 | **Authentication** | **Amazon Cognito** | Quản lý tài khoản Host; Backend FastAPI trực tiếp xác thực Cognito JWT và cấp Ephemeral JWT cho người nghe. |
 | **Monitoring & Tracing** | **Amazon CloudWatch** + **AWS X-Ray** | Thu thập Container Logs, Custom Metrics (Latency STT/MT/TTS), cảnh báo lỗi và theo dõi cước phí. |
 

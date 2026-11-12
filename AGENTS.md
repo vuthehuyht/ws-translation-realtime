@@ -8,6 +8,7 @@ DO NOT read all specification files at once. Read ONLY the document relevant to 
 
 | When working on... | MUST read specification |
 | :--- | :--- |
+| Implementation Roadmap, 10 Execution Phases & Granular Task Breakdown (`TASK-DB-01` .. `TASK-HA-04`) | [implementation-tasks-roadmap.md](file:///D:/code/ws-translation-realtime/docs/tasks/implementation-tasks-roadmap.md) |
 | 10s micro-billing formula, Stripe/VietQR top-up, cost optimization rules (VAD, TTS), Host/Listener permissions | [01-business-requirements-and-billing.md](file:///D:/code/ws-translation-realtime/docs/specs/01-business-requirements-and-billing.md) |
 | Detailed business logic & Acceptance Criteria for all 38 features (`FR-101` .. `FR-604`) | [02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md) |
 | AWS Single-AZ architecture, Redis keys, 6 DynamoDB tables, Failover/Handover, Docker & GitHub Actions CI/CD | [03-system-architecture-and-techstack.md](file:///D:/code/ws-translation-realtime/docs/specs/03-system-architecture-and-techstack.md) |
@@ -19,9 +20,10 @@ DO NOT read all specification files at once. Read ONLY the document relevant to 
 
 - **Frontend (`apps/web`)**: Next.js 15 (App Router, TypeScript, `output: "standalone"`), TailwindCSS, Shadcn UI, WebAudio (`AudioWorklet` + Silero VAD), AWS AppSync Events WebSocket Client.
 - **Backend (`apps/backend`)**: Python 3.12+, **FastAPI**, **Uvicorn (`uvloop` + `httptools`)**, **Pydantic v2**, package management via **`uv`**. Consolidates REST API (`/api/v1/*`), WebSocket Audio Ingest (`/ws/v1/*`), and Async Background Workers in a single unified service.
-- **Database & State (100% NoSQL — SQL/RDS is STRICTLY FORBIDDEN)**:
-  - **ElastiCache for Redis (Single-AZ)**: 10s Audio Ring Buffer (`STREAM`), active TTS listener counter (`tts_count`), real-time host wallet balance (`INCRBYFLOAT`).
-  - **Amazon DynamoDB (On-Demand)**: 6 tables (`Users`, `Wallets`, `PaymentTransactions`, `Rooms`, `RoomTranscripts` [24h TTL], `UsageLedger`).
+- **Database & State**:
+  - **PostgreSQL 16 (Primary ACID Database)**: 9 relational tables (`users`, `user_profiles`, `wallets`, `payment_transactions`, `custom_vocabularies`, `promo_codes`, `promo_redemptions`, `rooms`, `room_transcripts` [metadata & S3 keys], `usage_ledger`). Handled via **SQLAlchemy 2.0 Async (`asyncpg`)** and **Alembic** migrations.
+  - **ElastiCache for Redis (Single-AZ)**: 10s Audio Ring Buffer (`STREAM`), active TTS listener counter (`tts_count`), ephemeral live session transcript buffer.
+  - **Amazon S3**: Permanent transcript package storage (`master.json`, `.txt`, `.srt`, `.vtt`, `.csv`), AI summaries (`summary.json`), and 24h TTS audio chunks (`.mp3`).
 - **AWS AI & Fan-out Pipeline**: Amazon Transcribe Streaming (STT) -> Amazon Translate (MT) -> Amazon Polly Neural (TTS) -> S3/CloudFront + AWS AppSync Events (Fan-out up to 1,000 listeners/room). On-demand meeting summaries use **Amazon Bedrock** (`Claude 3.5 Haiku` / `Nova Lite`).
 - **Deployment**: GitHub Actions (AWS OIDC) -> Build 2 separate Docker images (`web` & `backend`) -> Push to **Amazon ECR** -> Rolling deploy to 2 **Amazon ECS Fargate** services behind a single ALB in `ap-southeast-1a`.
 
@@ -38,17 +40,20 @@ ws-translation-realtime/
 │   │   ├── src/worklets/             # AudioWorklet PCM 16kHz + Local Ring Buffer (5s) + VAD
 │   │   └── src/lib/                  # API Client, AppSync Subscriber, Adaptive Audio Queue
 │   └── backend/                      # FastAPI + asyncio/uvloop Docker (Port 8000)
+│       ├── alembic/                  # Database schema migrations (asyncpg)
 │       ├── app/
 │       │   ├── main.py               # Entrypoint (/api/v1, /ws/v1, Lifespan background tasks)
-│       │   ├── api/v1/               # Routers: users, rooms, transcripts, wallets, webhooks, health
+│       │   ├── api/                  # Routes (auth, rooms, wallets, transcripts, health) & deps.py
+│       │   ├── core/                 # config.py, db.py (async engine), security.py, exceptions.py
+│       │   ├── models/               # SQLAlchemy 2.0 ORM Models (9 PostgreSQL tables)
+│       │   ├── schemas/              # Pydantic v2 Models & Binary Audio protocol
+│       │   ├── services/             # Business Logic (auth, rooms, billing, transcripts)
+│       │   ├── integrations/         # AWS Clients (Cognito, S3, Transcribe, Translate, Polly, Bedrock, AppSync)
 │       │   ├── ws/                   # Binary Audio Ingest, 500ms ACK, SIGTERM Handover
-│       │   ├── workers/              # Asyncio tasks: 10s Billing & S3 Transcript Compiler
-│       │   ├── services/             # Interfaces & AWS/Mock Implementations (STT, MT, TTS, Bedrock)
-│       │   ├── repositories/         # Async DynamoDB & Redis Repositories
-│       │   └── schemas/              # Pydantic v2 Models
-│       └── tests/                    # pytest + pytest-asyncio + moto + fakeredis
-├── infra/                            # AWS CDK Stacks
-└── docker-compose.yml                # Local dev: web + backend + redis + dynamodb-local
+│       │   └── workers/              # Asyncio tasks: 10s Micro-Billing & S3 Transcript Compiler
+│       └── tests/                    # pytest + pytest-asyncio + mocks
+├── infra/                            # Terraform Multi-Environment Stacks (dev, staging, prod)
+└── docker-compose.yml                # Local dev: web + backend + postgres + redis
 ```
 
 ---
@@ -58,8 +63,9 @@ ws-translation-realtime/
 ### 4.1. Async I/O & Concurrency in FastAPI
 - **NO Blocking I/O inside `async def`**: Never use synchronous `boto3`, `requests`, `time.sleep()`, or synchronous `redis.Redis` inside the event loop.
 - **Required Async Libraries**:
+  - Database: `sqlalchemy.ext.asyncio` + `asyncpg`.
   - STT: `amazon-transcribe` (native `asyncio` HTTP/2 streaming).
-  - AWS Services (DynamoDB, S3, Translate, Polly, Bedrock): `aioboto3` / `aiobotocore`.
+  - AWS Services (S3, Translate, Polly, Bedrock, Cognito, AppSync): `aioboto3` / `aiobotocore`.
   - Redis: `redis.asyncio`.
   - External HTTP: `httpx.AsyncClient`.
 - **Parallel N-Language Translation (`FR-304`)**: Always use `await asyncio.gather(*tasks)` when translating a segment into $N$ target languages to keep total MT latency `< 150ms`.
@@ -68,21 +74,21 @@ ws-translation-realtime/
 - **16-byte Binary Audio Header (Big-Endian `>IQBBH`)**:
   - Python unpack/pack: `seq_id, timestamp_ms, codec, flags, _ = struct.unpack(">IQBBH", frame[:16])` (4 + 8 + 1 + 1 + 2 = 16 bytes), followed by `audio_payload = frame[16:]`.
   - TypeScript `DataView`: `getUint32(0, false)`, `getBigUint64(4, false)`, `getUint8(12)`, `getUint8(13)`, `getUint16(14, false)`.
-- **Redis Ring Buffer & Commit (`FR-302`, `FR-306`)**: Append every incoming audio frame to Redis Stream `room:{roomId}:audio_buffer` (`MAXLEN ~ 100`). When a `Final` segment completes, update `last_committed_seq`, trim older frames, and spawn a non-blocking task (`asyncio.create_task`) to persist the segment to `RoomTranscripts` (TTL `+24h`).
+- **Redis Ring Buffer & S3 Transcript Pipeline (`FR-302`, `FR-306`)**: Append every incoming audio frame to Redis Stream `room:{roomId}:audio_buffer` (`MAXLEN ~ 100`). When a `Final` segment completes, update `last_committed_seq`, trim older frames, and store live sentences in Redis List `room:{roomId}:live_transcripts`. When room ends, compile to S3 (`master.json`, `.txt`, `.srt`, `.csv`) and record S3 key in PostgreSQL `room_transcripts`.
 - **Graceful Handover (`FR-602`)**: On `SIGTERM`, mark the worker state as `DRAINING`, wait for the current utterance to reach `Final`, then send `{"event": "PREPARE_HANDOVER"}` before closing the WebSocket.
 
 ### 4.3. Cost Protection & Atomic Billing
 - **Demand-Driven TTS (`FR-305`)**: Only invoke Amazon Polly for language `lang` if `HGET room:{roomId}:tts_count {lang} > 0`.
 - **Partial Debounce (`FR-304`)**: Throttle `Partial` translations to at most once every `300ms` (or when $\ge 3$ new words are added).
 - **Idempotent Billing & Webhooks (`FR-502`, `FR-506`)**:
-  - Deduct 10s usage atomically via `INCRBYFLOAT wallet:{hostId}:balance -cost`.
-  - Payment webhooks MUST verify `HMAC-SHA256` signatures and enforce DynamoDB `ConditionExpression` (`#status = :pending`) to prevent double-crediting.
+  - Deduct 10s usage atomically via PostgreSQL transaction (`UPDATE wallets SET balance = balance - :cost ...` with `INSERT INTO usage_ledger`).
+  - Payment webhooks MUST verify `HMAC-SHA256` signatures and enforce PostgreSQL `payment_transactions.transaction_id` unique constraint to prevent double-crediting.
   - Exclude any audio frames or characters from billing metrics if an AWS AI service returns a `5xx` error.
-- **On-Demand AI Summary (`FR-407`)**: Only the Host can trigger `POST /api/v1/rooms/{roomId}/summary`. Check `summaryStatus == "READY"` on S3 first; return cached `summary.json` for free (`$0`) if present. Otherwise, invoke Bedrock once, cache on S3 (90-day retention), and deduct the Host's wallet once.
+- **On-Demand AI Summary (`FR-407`)**: Only the Host can trigger `POST /api/v1/transcripts/{roomId}/summary`. Check `summary_status == "READY"` on PostgreSQL first; return cached `summary_s3_key` for free (`$0`) if present. Otherwise, invoke Bedrock once, save to S3 (90-day retention), update `room_transcripts`, and deduct the Host's wallet once.
 
 ### 4.4. Local Development & Offline Testing Strategy
-- Wrap all external AWS AI/Event services (`Transcribe`, `Translate`, `Polly`, `Bedrock`, `AppSync`) behind **Protocol / Abstract Interfaces** in `app/services/`.
-- When `ENV=local` or `ENV=test` (no real AWS credentials), automatically inject `MockSTTService`, `MockTranslateService`, `MockPollyService`, `MockBedrockService` and use `fakeredis` + `moto` (or `dynamodb-local`) so the entire E2E flow and `pytest` suite run 100% offline.
+- Wrap all external AWS AI/Event services (`Transcribe`, `Translate`, `Polly`, `Bedrock`, `AppSync`) in `app/integrations/`.
+- When `ENV=local` or `ENV=test` (no real AWS credentials), automatically inject mock clients and use `fakeredis` + local PostgreSQL container so the entire E2E flow and `pytest` suite run 100% offline.
 
 ---
 
