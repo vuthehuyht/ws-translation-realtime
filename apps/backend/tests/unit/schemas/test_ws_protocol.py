@@ -1,15 +1,8 @@
+"""Unit tests for Binary Audio WebSocket Protocol Schema (app.schemas.ws_protocol)."""
+
 import pytest
-from httpx import AsyncClient
 
 from app.schemas.ws_protocol import BinaryAudioFrame
-
-
-async def test_health_endpoint_returns_ok(async_client: AsyncClient) -> None:
-    response = await async_client.get("/api/v1/health")
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["status"] == "ok"
-    assert payload["service"] == "ws-translation-backend"
 
 
 def test_binary_audio_frame_roundtrip_big_endian() -> None:
