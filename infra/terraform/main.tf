@@ -62,8 +62,8 @@ module "dynamodb" {
 }
 
 # 5. ElastiCache for Redis (Single-AZ Node in ap-southeast-1a)
-module "redis" {
-  source = "./modules/redis"
+module "elasticache" {
+  source = "./modules/elasticache"
 
   project_name       = var.project_name
   environment        = var.environment
@@ -141,7 +141,7 @@ module "ecs" {
   web_desired_count     = var.web_desired_count
   backend_desired_count = var.backend_desired_count
 
-  redis_url           = module.redis.redis_url
+  redis_url           = module.elasticache.redis_url
   s3_bucket_name      = module.s3_cloudfront.bucket_name
   appsync_graphql_url = module.appsync.graphql_url
 

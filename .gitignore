@@ -76,6 +76,9 @@ override.tf.json
 terraform.rc
 *.tfvars
 !terraform.tfvars.example
+*.tfplan
+*tfplan*
+*.plan
 
 # =============================================================================
 # AWS CDK & Local Infrastructure (infra)

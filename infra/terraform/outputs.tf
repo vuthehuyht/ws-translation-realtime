@@ -25,7 +25,7 @@ output "s3_media_bucket_name" {
 
 output "redis_endpoint" {
   description = "Internal endpoint for ElastiCache Redis"
-  value       = module.redis.redis_endpoint
+  value       = module.elasticache.redis_endpoint
 }
 
 output "cognito_user_pool_id" {
