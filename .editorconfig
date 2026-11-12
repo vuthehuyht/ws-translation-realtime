@@ -10,22 +10,34 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 2
 
-# Python (apps/backend, infra CDK) — matches Ruff configuration in pyproject.toml
+# Python (apps/backend) — matches Ruff configuration in pyproject.toml
 [*.{py,pyi}]
 indent_size = 4
 max_line_length = 100
 
 # Web Frontend, Config & Infrastructure (apps/web, GitHub Actions, Docker Compose)
-[*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,css,scss,html,yml,yaml,toml}]
+[*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc,css,scss,html,yml,yaml}]
 indent_size = 2
+
+# TOML configuration files (pyproject.toml, uv.lock, etc.)
+[*.toml]
+indent_style = space
+indent_size = 2
+
+# Makefiles require hard tabs for recipe lines
+[Makefile]
+indent_style = tab
+indent_size = 4
+tab_width = 4
+
+[*.mk]
+indent_style = tab
+indent_size = 4
+tab_width = 4
 
 # Markdown — preserve trailing spaces used for explicit line breaks
 [*.md]
 trim_trailing_whitespace = false
-
-# Makefiles require hard tabs
-[{Makefile,*.mk}]
-indent_style = tab
 
 # Windows batch/PowerShell scripts (if used locally on Windows)
 [*.{bat,cmd,ps1}]
