@@ -44,7 +44,7 @@ sequenceDiagram
     participant Cognito as Amazon Cognito
     participant API as Backend API & Lambda
     participant PG as Cổng Thanh toán (Stripe / VietQR)
-    participant DB as DynamoDB & Redis
+    participant DB as PostgreSQL & Redis
 
     H->>Cognito: 1. Đăng ký tài khoản (Email/Password hoặc Google SSO)
     Cognito-->>H: Gửi mã xác thực OTP qua Email
@@ -56,7 +56,7 @@ sequenceDiagram
     PG-->>H: Hiển thị trang thanh toán / Mã QR
     H->>PG: 5. Thực hiện thanh toán
     PG->>API: 6. Gọi Webhook báo thanh toán thành công (kèm chữ ký HMAC)
-    API->>DB: Kiểm tra chống trùng (Idempotency) -> Cộng $50 vào DynamoDB & Redis
+    API->>DB: Kiểm tra chống trùng (Idempotency) -> Cộng $50 vào PostgreSQL & Redis
     API-->>H: 7. Thông báo nạp tiền thành công tức thời trên màn hình
 ```
 
@@ -156,7 +156,7 @@ $$\Delta \text{Cost}_t = \left( S_{\text{audio}} \times P_{\text{stt}} \right) +
    - **Nội địa (VietQR / VNPay / SePay)**: Sinh mã QR chuyển khoản ngân hàng tự động chứa nội dung định danh giao dịch (`tx_id`), tự động khớp lệnh qua Webhook trong `< 5 giây` sau khi chuyển khoản.
 2. **Nạp tiền Trực tiếp Ngay Trong Phòng (In-Room Live Top-up)**:
    - Khi đang diễn ra hội thảo mà nhận cảnh báo sắp hết tiền (`< 5 phút`), Host có thể bấm nút **"Nạp nhanh"** ngay trên thanh điều khiển hoặc quét mã QR trên điện thoại mà không làm gián đoạn luồng thu âm.
-   - Ngay khi Webhook thanh toán báo thành công, hệ thống cộng thẳng số tiền mới vào cả **DynamoDB** và bộ nhớ đệm **Redis (`wallet:{hostId}:balance`)** để kéo dài thời gian phòng tức thì.
+   - Ngay khi Webhook thanh toán báo thành công, hệ thống cộng thẳng số tiền mới vào cả **PostgreSQL** và bộ nhớ đệm **Redis (`wallet:{hostId}:balance`)** để kéo dài thời gian phòng tức thì.
 3. **Tự động Nạp tiền khi Chạm ngưỡng (Auto Top-up)**:
    - Host có thể liên kết thẻ thanh toán và bật cấu hình: *"Tự động nạp thêm `$20` khi số dư khả dụng xuống dưới `$5`"*.
    - Tiến trình Billing khi phát hiện số dư sau khấu trừ xuống dưới `$5` sẽ tự động kích hoạt giao dịch thu tiền ngầm (Off-session Charge) để hội thảo không bao giờ bị ngắt giữa chừng.
@@ -174,6 +174,6 @@ $$\Delta \text{Cost}_t = \left( S_{\text{audio}} \times P_{\text{stt}} \right) +
 3. **Bảo mật nội dung & Chính sách Lưu trữ Biên bản Hội thảo (Retention Policy)**:
    - **File âm thanh (Audio Chunks)**: Các đoạn ghi âm tạm thời và file âm thanh TTS (`.mp3`/`.ogg`) chỉ phục vụ phát trực tiếp và tự động xóa hoàn toàn khỏi S3 sau **24 giờ**.
    - **Lịch sử & Biên bản Bản dịch (Transcripts)**:
-     - **Lưu trữ nóng (24 giờ trên DynamoDB)**: Phục vụ người nghe vào phòng muộn hoặc tải lại trang (F5) có thể xem ngay toàn bộ lịch sử phụ đề từ đầu buổi họp; tự động xóa khỏi DynamoDB sau **24 giờ** qua cơ chế TTL.
-     - **Lưu trữ tổng hợp (90 ngày trên Amazon S3 — Miễn phí cho Host)**: Ngay khi kết thúc phòng, hệ thống tự động tổng hợp toàn bộ bản dịch thành bộ file chuẩn (`.txt`, `.srt`, `.vtt`, `.csv`, `.json`) lưu trên S3 trong **90 ngày** (sau 90 ngày S3 Lifecycle tự động xóa vĩnh viễn).
+     - **Lưu trữ phiên trực tiếp (Trên Redis)**: Phục vụ người nghe vào phòng muộn hoặc tải lại trang (F5) có thể xem ngay toàn bộ lịch sử phụ đề từ đầu buổi họp thông qua bộ nhớ đệm Redis của phòng.
+     - **Lưu trữ tổng hợp (90 ngày trên Amazon S3 & Metadata trên PostgreSQL)**: Ngay khi kết thúc phòng, hệ thống tự động tổng hợp toàn bộ bản dịch thành bộ file chuẩn (`master.json`, `.txt`, `.srt`, `.vtt`, `.csv`) lưu trên S3 trong **90 ngày** (sau 90 ngày S3 Lifecycle tự động xóa vĩnh viễn), đồng thời lưu khóa định danh S3 Key vào bảng `room_transcripts` trên PostgreSQL.
      - **Phân quyền tải xuống**: Host luôn có toàn quyền tải xuống từ Dashboard; Listener chỉ được tải nếu Host bật tùy chọn `allowListenerDownload = true` cho phòng đó.
