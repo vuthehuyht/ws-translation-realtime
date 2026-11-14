@@ -205,3 +205,43 @@ async def test_aws_cognito_resend_confirmation_code() -> None:
     )
     with pytest.raises(NotFoundException, match="not found"):
         await cognito.resend_confirmation_code("missing@example.com")
+
+
+def test_get_cognito_client_selection_by_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.config import Settings
+    from app.integrations import cognito as cognito_module
+    from app.integrations.cognito import MockCognitoClient
+
+    monkeypatch.setattr(cognito_module, "_cognito_instance", None)
+
+    # 1. env="local" with real Cognito IDs -> AwsCognitoClient
+    local_live_settings = Settings(
+        env="local",
+        cognito_user_pool_id="ap-southeast-1_LivePool",
+        cognito_client_id="liveclient123",
+        aws_access_key_id="AKIATEST",
+        aws_secret_access_key="SECRETTEST",
+    )
+    monkeypatch.setattr(cognito_module, "get_settings", lambda: local_live_settings)
+    client = cognito_module.get_cognito_client()
+    assert isinstance(client, AwsCognitoClient)
+
+    # 2. env="local" with placeholder _local ID -> MockCognitoClient
+    monkeypatch.setattr(cognito_module, "_cognito_instance", None)
+    local_mock_settings = Settings(
+        env="local",
+        cognito_user_pool_id="ap-southeast-1_local",
+        cognito_client_id="local_client_id",
+    )
+    monkeypatch.setattr(cognito_module, "get_settings", lambda: local_mock_settings)
+    assert isinstance(cognito_module.get_cognito_client(), MockCognitoClient)
+
+    # 3. env="test" even with real Cognito IDs -> MockCognitoClient
+    monkeypatch.setattr(cognito_module, "_cognito_instance", None)
+    test_settings = Settings(
+        env="test",
+        cognito_user_pool_id="ap-southeast-1_LivePool",
+        cognito_client_id="liveclient123",
+    )
+    monkeypatch.setattr(cognito_module, "get_settings", lambda: test_settings)
+    assert isinstance(cognito_module.get_cognito_client(), MockCognitoClient)
