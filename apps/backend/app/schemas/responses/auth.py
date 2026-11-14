@@ -67,3 +67,13 @@ class LoginResponse(BaseModel):
 
     tokens: TokenResponse
     user: UserProfileResponse
+
+
+class ResendOtpResponse(BaseModel):
+    """Response returned upon successfully resending a confirmation OTP."""
+
+    status: str = "OTP_SENT"
+    email: str
+    retry_after: int = Field(default=60, alias="retryAfter")
+
+    model_config = ConfigDict(populate_by_name=True)

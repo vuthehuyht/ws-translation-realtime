@@ -17,6 +17,7 @@ from app.core.exceptions import (
     BadGatewayException,
     ConflictException,
     NotFoundException,
+    TooManyRequestsException,
     UnauthorizedException,
     ValidationException,
 )
@@ -233,6 +234,10 @@ class AwsCognitoClient(CognitoClient):
                     raise NotFoundException(f"User with email '{email}' not found") from e
                 if error_code == "InvalidParameterException":
                     raise ConflictException("User is already confirmed") from e
+                if error_code in ("LimitExceededException", "TooManyRequestsException"):
+                    raise TooManyRequestsException(
+                        "Too many OTP requests. Please try again later."
+                    ) from e
                 logger.error(
                     "Cognito resend_confirmation ClientError: %s - %s",
                     error_code,

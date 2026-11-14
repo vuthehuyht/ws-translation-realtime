@@ -9,6 +9,7 @@ from app.core.exceptions import (
     ForbiddenException,
     NotFoundException,
     PaymentRequiredException,
+    TooManyRequestsException,
     UnauthorizedException,
 )
 from app.main import app
@@ -45,6 +46,11 @@ async def trigger_payment_required() -> None:
 @dummy_router.get("/bad-gateway")
 async def trigger_bad_gateway() -> None:
     raise BadGatewayException("Amazon Polly unavailable")
+
+
+@dummy_router.get("/too-many-requests")
+async def trigger_too_many_requests() -> None:
+    raise TooManyRequestsException("Rate limit exceeded", details={"retryAfter": 60})
 
 
 app.include_router(dummy_router)
@@ -93,3 +99,11 @@ async def test_bad_gateway_exception_response(async_client: AsyncClient) -> None
     assert response.status_code == 502
     payload = response.json()
     assert payload["error"]["code"] == "BAD_GATEWAY"
+
+
+async def test_too_many_requests_exception_response(async_client: AsyncClient) -> None:
+    response = await async_client.get("/test-exceptions/too-many-requests")
+    assert response.status_code == 429
+    payload = response.json()
+    assert payload["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+    assert payload["error"]["details"] == {"retryAfter": 60}

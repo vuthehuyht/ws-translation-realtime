@@ -125,6 +125,20 @@ class BadGatewayException(AppException):
         )
 
 
+class TooManyRequestsException(AppException):
+    """Rate limit exceeded (HTTP 429)."""
+
+    def __init__(
+        self, message: str = "Too many requests", details: dict[str, Any] | None = None
+    ) -> None:
+        super().__init__(
+            message=message,
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            error_code="RATE_LIMIT_EXCEEDED",
+            details=details,
+        )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register uniform RFC 7807 JSON error handlers on the FastAPI application."""
 

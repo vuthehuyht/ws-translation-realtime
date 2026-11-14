@@ -63,9 +63,14 @@ def get_room_repository(
 def get_auth_service(
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
     wallet_repo: Annotated[WalletRepository, Depends(get_wallet_repository)],
+    redis_client: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> AuthService:
-    """Provide AuthService instance wired with user and wallet repositories."""
-    return AuthService(user_repo=user_repo, wallet_repo=wallet_repo)
+    """Provide AuthService instance wired with user, wallet repositories, and Redis."""
+    return AuthService(
+        user_repo=user_repo,
+        wallet_repo=wallet_repo,
+        redis_client=redis_client,
+    )
 
 
 def get_wallet_service(
