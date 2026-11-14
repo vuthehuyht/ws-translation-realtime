@@ -13,7 +13,9 @@ from app.schemas.requests import ConfirmRequest, LoginRequest, RegisterRequest
 from app.services.auth_service import AuthService
 
 
-async def test_auth_service_full_registration_and_login_lifecycle(db_session: AsyncSession) -> None:
+async def test_auth_service_registration_and_confirmation_lifecycle(
+    db_session: AsyncSession,
+) -> None:
     user_repo = UserRepository(session=db_session)
     wallet_repo = WalletRepository(session=db_session)
     mock_cognito = MockCognitoClient()
@@ -24,27 +26,27 @@ async def test_auth_service_full_registration_and_login_lifecycle(db_session: As
         cognito_client=mock_cognito,
     )
 
-    # 1. Register new host
+    # 1. Register new host (TASK-AUTH-01)
     reg_req = RegisterRequest(
         email="host.new@example.com",
         password="SuperPassword123@",
-        full_name="Nguyễn Văn A",
+        fullName="Nguyễn Văn A",
         role="HOST",
     )
     reg_res = await service.register(reg_req)
     assert reg_res.email == "host.new@example.com"
-    assert reg_res.status == "PENDING_CONFIRMATION"
+    assert reg_res.status == "CONFIRMATION_REQUIRED"
+    assert len(reg_res.user_sub) > 10
 
-    # Verify wallet was initialized with $0.00
-    wallet = await wallet_repo.get_by_host_id(reg_res.user_id)
-    assert wallet is not None
-    assert wallet.balance == Decimal("0.0000")
+    # Under TASK-AUTH-01, PostgreSQL is NOT yet populated until OTP confirmation
+    user_before_confirm = await user_repo.get_by_id(reg_res.user_sub)
+    assert user_before_confirm is None
 
-    # 2. Duplicate registration should fail
+    # 2. Duplicate registration in Cognito raises ConflictException (HTTP 409)
     with pytest.raises(ConflictException, match="already exists"):
         await service.register(reg_req)
 
-    # 3. Confirm sign up
+    # 3. Confirm sign up with OTP (TASK-AUTH-02)
     confirm_req = ConfirmRequest(
         email="host.new@example.com",
         confirmation_code="123456",
@@ -52,12 +54,16 @@ async def test_auth_service_full_registration_and_login_lifecycle(db_session: As
     confirm_res = await service.confirm_sign_up(confirm_req)
     assert confirm_res["status"] == "CONFIRMED"
 
-    # User in DB should now be ACTIVE
-    user = await user_repo.get_by_id(reg_res.user_id)
+    # User in DB should now be ACTIVE and Wallet initialized ($0.00)
+    user = await user_repo.get_by_id(reg_res.user_sub)
     assert user is not None
     assert user.status == "ACTIVE"
 
-    # 4. Login
+    wallet = await wallet_repo.get_by_host_id(reg_res.user_sub)
+    assert wallet is not None
+    assert wallet.balance == Decimal("0.0000")
+
+    # 4. Login after confirmation
     login_req = LoginRequest(
         email="host.new@example.com",
         password="SuperPassword123@",
@@ -81,7 +87,7 @@ async def test_auth_service_login_with_wrong_password_fails(db_session: AsyncSes
         RegisterRequest(
             email="login.test@example.com",
             password="CorrectPassword123@",
-            full_name="Tester",
+            fullName="Tester",
         )
     )
     await service.confirm_sign_up(

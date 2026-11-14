@@ -1,16 +1,25 @@
 """Authentication Response Schemas."""
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class RegisterResponse(BaseModel):
     """Response returned upon successful registration."""
 
-    user_id: str = Field(..., alias="userId")
+    status: str = "CONFIRMATION_REQUIRED"
     email: str
-    status: str = "PENDING_CONFIRMATION"
+    user_sub: str = Field(
+        ...,
+        validation_alias=AliasChoices("userSub", "userId", "user_sub", "user_id"),
+        serialization_alias="userSub",
+    )
 
     model_config = ConfigDict(populate_by_name=True)
+
+    @property
+    def user_id(self) -> str:
+        """Alias for backward compatibility."""
+        return self.user_sub
 
 
 class TokenResponse(BaseModel):

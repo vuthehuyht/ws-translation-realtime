@@ -29,7 +29,7 @@ async def register(
     payload: RegisterRequest,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> RegisterResponse:
-    """Register a new user account with Cognito and initialize database records."""
+    """Register a new user account in Cognito and trigger OTP email delivery."""
     return await auth_service.register(payload)
 
 
