@@ -193,7 +193,24 @@ class AwsCognitoClient(CognitoClient):
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code")
                 error_msg = e.response.get("Error", {}).get("Message", str(e))
-                if error_code in ("CodeMismatchException", "ExpiredCodeException"):
+                if error_code in (
+                    "NotAuthorizedException",
+                    "CodeMismatchException",
+                    "ExpiredCodeException",
+                ):
+                    # Support idempotent confirmation if user is already CONFIRMED in Cognito
+                    try:
+                        user_resp = await client.admin_get_user(
+                            UserPoolId=self.user_pool_id,
+                            Username=email,
+                        )
+                        if user_resp.get("UserStatus") == "CONFIRMED":
+                            info = self._extract_user_info(user_resp, email)
+                            return {"status": "CONFIRMED", **info}
+                    except ClientError:
+                        pass
+                    if error_code == "NotAuthorizedException":
+                        raise UnauthorizedException(error_msg) from e
                     raise ValidationException(error_msg) from e
                 if error_code == "UserNotFoundException":
                     raise NotFoundException(f"User with email '{email}' not found") from e
@@ -252,6 +269,18 @@ class AwsCognitoClient(CognitoClient):
                 logger.error("Cognito authenticate ClientError: %s - %s", error_code, error_msg)
                 raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
 
+    @staticmethod
+    def _extract_user_info(response: dict[str, Any], email: str) -> dict[str, str]:
+        """Extract sub and name attributes from an admin_get_user response."""
+        attrs = {
+            attr.get("Name"): str(attr.get("Value", ""))
+            for attr in response.get("UserAttributes", [])
+        }
+        sub = attrs.get("sub", "")
+        if not sub:
+            raise NotFoundException(f"Sub attribute not found for user '{email}'")
+        return {"sub": sub, "name": attrs.get("name", "")}
+
     async def get_user_info(self, email: str) -> dict[str, str]:
         """Fetch user sub and name attributes via admin_get_user."""
         async with self.session.client("cognito-idp", region_name=self.region) as client:
@@ -260,14 +289,7 @@ class AwsCognitoClient(CognitoClient):
                     UserPoolId=self.user_pool_id,
                     Username=email,
                 )
-                attrs = {
-                    attr.get("Name"): str(attr.get("Value", ""))
-                    for attr in response.get("UserAttributes", [])
-                }
-                sub = attrs.get("sub", "")
-                if not sub:
-                    raise NotFoundException(f"Sub attribute not found for user '{email}'")
-                return {"sub": sub, "name": attrs.get("name", "")}
+                return self._extract_user_info(response, email)
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code")
                 if error_code == "UserNotFoundException":

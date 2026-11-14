@@ -49,19 +49,32 @@ async def test_auth_service_registration_and_confirmation_lifecycle(
     # 3. Confirm sign up with OTP (TASK-AUTH-02)
     confirm_req = ConfirmRequest(
         email="host.new@example.com",
-        confirmation_code="123456",
+        otpCode="123456",
     )
     confirm_res = await service.confirm_sign_up(confirm_req)
-    assert confirm_res["status"] == "CONFIRMED"
+    assert confirm_res.status == "CONFIRMED"
+    assert confirm_res.wallet_balance == Decimal("2.0000")
 
-    # User in DB should now be ACTIVE and Wallet initialized ($0.00)
+    # User in DB should now be ACTIVE, Wallet initialized ($2.00 Welcome Bonus), and Ledger recorded
     user = await user_repo.get_by_id(reg_res.user_sub)
     assert user is not None
     assert user.status == "ACTIVE"
 
     wallet = await wallet_repo.get_by_host_id(reg_res.user_sub)
     assert wallet is not None
-    assert wallet.balance == Decimal("0.0000")
+    assert wallet.balance == Decimal("2.0000")
+
+    welcome_tx = await wallet_repo.get_transaction_by_provider_id(f"welcome_{reg_res.user_sub}")
+    assert welcome_tx is not None
+    assert welcome_tx.type == "PROMO_CREDIT"
+    assert welcome_tx.provider == "SYSTEM"
+    assert welcome_tx.amount == Decimal("2.0000")
+    assert welcome_tx.status == "SUCCEEDED"
+
+    # Idempotent second confirmation must not fail or double-credit Welcome Bonus
+    second_confirm = await service.confirm_sign_up(confirm_req)
+    assert second_confirm.status == "CONFIRMED"
+    assert second_confirm.wallet_balance == Decimal("2.0000")
 
     # 4. Login after confirmation
     login_req = LoginRequest(

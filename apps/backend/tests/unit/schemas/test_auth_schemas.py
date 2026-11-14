@@ -97,9 +97,12 @@ def test_register_request_password_complexity() -> None:
 
 
 def test_confirm_request_validation() -> None:
-    # Valid OTP (6 digits)
+    # Valid OTP (6 digits) with snake_case and otpCode alias
     req = ConfirmRequest(email="user@example.com", confirmation_code="123456")
     assert req.confirmation_code == "123456"
+
+    req_alias = ConfirmRequest(email="user@example.com", otpCode="654321")
+    assert req_alias.confirmation_code == "654321"
 
     # Non-digit code
     with pytest.raises(ValidationError):

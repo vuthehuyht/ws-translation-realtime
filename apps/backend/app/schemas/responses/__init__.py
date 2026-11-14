@@ -1,6 +1,7 @@
 """Response Schemas Package."""
 
 from app.schemas.responses.auth import (
+    ConfirmResponse,
     LoginResponse,
     RegisterResponse,
     TokenResponse,
@@ -9,6 +10,7 @@ from app.schemas.responses.auth import (
 from app.schemas.responses.health import HealthResponse
 
 __all__ = [
+    "ConfirmResponse",
     "HealthResponse",
     "LoginResponse",
     "RegisterResponse",

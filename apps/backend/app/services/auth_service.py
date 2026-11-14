@@ -3,12 +3,15 @@
 Orchestrates Cognito integration with PostgreSQL User and Wallet repositories.
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
+
+from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import ConflictException, UnauthorizedException
 from app.integrations.cognito import CognitoClient, get_cognito_client
 from app.models.user import User, UserProfile
-from app.models.wallet import Wallet
+from app.models.wallet import PaymentTransaction, Wallet
 from app.repositories.user_repository import UserRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.schemas.requests import (
@@ -17,11 +20,14 @@ from app.schemas.requests import (
     RegisterRequest,
 )
 from app.schemas.responses import (
+    ConfirmResponse,
     LoginResponse,
     RegisterResponse,
     TokenResponse,
     UserProfileResponse,
 )
+
+WELCOME_BONUS_AMOUNT = Decimal("2.0000")
 
 
 class AuthService:
@@ -62,48 +68,92 @@ class AuthService:
             user_sub=user_sub,
         )
 
-    async def confirm_sign_up(self, request: ConfirmRequest) -> dict[str, str]:
+    async def confirm_sign_up(self, request: ConfirmRequest) -> ConfirmResponse:
         """Confirm user registration with verification code and initialize PostgreSQL records."""
         normalized_email = request.email.strip().lower()
         result = await self.cognito.confirm_sign_up(
             email=normalized_email,
             confirmation_code=request.confirmation_code,
         )
-        user_info = await self.cognito.get_user_info(normalized_email)
-        user_sub = result.get("sub") or user_info["sub"]
-        full_name = user_info.get("name") or normalized_email.split("@")[0]
+        user_sub = result.get("sub")
+        full_name = result.get("name")
+        if not user_sub or full_name is None:
+            user_info = await self.cognito.get_user_info(normalized_email)
+            user_sub = user_sub or user_info["sub"]
+            full_name = user_info.get("name") or normalized_email.split("@")[0]
+        else:
+            full_name = full_name or normalized_email.split("@")[0]
 
-        # Atomic PostgreSQL initialization (TASK-AUTH-02)
+        session = self.user_repo.session
+
+        # Idempotent ACID initialization across users, user_profiles, wallets, and ledger.
+        # Savepoints guard against concurrent duplicate confirm requests under READ COMMITTED.
         user = await self.user_repo.get_by_id(user_sub)
         if not user:
-            user = User(
-                id=user_sub,
-                email=normalized_email,
-                role="HOST",
-                status="ACTIVE",
-            )
-            profile = UserProfile(
-                user_id=user_sub,
-                full_name=full_name,
-                default_source_lang="vi-VN",
-                default_target_langs=["en-US"],
-            )
-            await self.user_repo.create_user_with_profile(user=user, profile=profile)
-
-            # Initialize default Wallet ($0.00)
-            wallet = Wallet(
-                host_id=user_sub,
-                balance=Decimal("0.0000"),
-                currency="USD",
-                auto_degrade_tts=True,
-                auto_topup_enabled=False,
-            )
-            await self.wallet_repo.create(wallet)
-        else:
+            try:
+                async with session.begin_nested():
+                    user = User(
+                        id=user_sub,
+                        email=normalized_email,
+                        role="HOST",
+                        status="ACTIVE",
+                    )
+                    profile = UserProfile(
+                        user_id=user_sub,
+                        full_name=full_name,
+                        timezone="Asia/Ho_Chi_Minh",
+                        default_source_lang="vi-VN",
+                        default_target_langs=["en-US"],
+                    )
+                    await self.user_repo.create_user_with_profile(user=user, profile=profile)
+            except IntegrityError:
+                user = await self.user_repo.get_by_id(user_sub)
+        elif user.status != "ACTIVE":
             user.status = "ACTIVE"
             await self.user_repo.update(user)
 
-        return {"status": result.get("status", "CONFIRMED")}
+        wallet = await self.wallet_repo.get_by_host_id(user_sub)
+        if not wallet:
+            try:
+                async with session.begin_nested():
+                    wallet = Wallet(
+                        host_id=user_sub,
+                        balance=WELCOME_BONUS_AMOUNT,
+                        currency="USD",
+                        auto_degrade_tts=True,
+                        auto_topup_enabled=False,
+                    )
+                    await self.wallet_repo.create(wallet)
+            except IntegrityError:
+                wallet = await self.wallet_repo.get_by_host_id(user_sub)
+
+        assert wallet is not None  # Guaranteed after insert or concurrent lookup
+
+        welcome_tx_id = f"welcome_{user_sub}"
+        existing_tx = await self.wallet_repo.get_transaction_by_provider_id(welcome_tx_id)
+        if not existing_tx:
+            try:
+                async with session.begin_nested():
+                    welcome_tx = PaymentTransaction(
+                        host_id=user_sub,
+                        transaction_id=welcome_tx_id,
+                        type="PROMO_CREDIT",
+                        provider="SYSTEM",
+                        amount=WELCOME_BONUS_AMOUNT,
+                        currency="USD",
+                        status="SUCCEEDED",
+                        metadata_json={"reason": "welcome_bonus"},
+                        completed_at=datetime.now(UTC),
+                    )
+                    await self.wallet_repo.create_transaction(welcome_tx)
+            except IntegrityError:
+                pass
+
+        return ConfirmResponse(
+            status=result.get("status", "CONFIRMED"),
+            user_sub=user_sub,
+            wallet_balance=wallet.balance,
+        )
 
     async def login(self, request: LoginRequest) -> LoginResponse:
         """Authenticate user against Cognito and retrieve profile details from database."""
