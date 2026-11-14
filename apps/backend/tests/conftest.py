@@ -6,6 +6,7 @@ mock service resets, and async HTTP test client.
 
 from collections.abc import AsyncGenerator, AsyncIterator
 
+import fakeredis.aioredis
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import (
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from app.api.deps import get_redis
 from app.core.db import get_db
 from app.integrations.appsync import MockAppSyncClient, set_appsync_client
 from app.integrations.cognito import MockCognitoClient, set_cognito_client
@@ -66,13 +68,19 @@ async def db_session() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest.fixture
 async def async_client(db_session: AsyncSession) -> AsyncIterator[AsyncClient]:
-    """Yield an AsyncClient with get_db overridden to use the test database session."""
+    """Yield an AsyncClient with get_db and get_redis overridden for isolated offline tests."""
+    fake_redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
 
     async def override_get_db() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
+    async def override_get_redis() -> fakeredis.aioredis.FakeRedis:
+        return fake_redis
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_redis] = override_get_redis
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         yield client
+    await fake_redis.aclose()
     app.dependency_overrides.clear()

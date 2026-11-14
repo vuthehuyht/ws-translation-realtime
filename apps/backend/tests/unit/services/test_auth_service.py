@@ -2,14 +2,20 @@
 
 from decimal import Decimal
 
+import fakeredis.aioredis
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ConflictException, UnauthorizedException
+from app.core.exceptions import (
+    ConflictException,
+    NotFoundException,
+    TooManyRequestsException,
+    UnauthorizedException,
+)
 from app.integrations.cognito import MockCognitoClient
 from app.repositories.user_repository import UserRepository
 from app.repositories.wallet_repository import WalletRepository
-from app.schemas.requests import ConfirmRequest, LoginRequest, RegisterRequest
+from app.schemas.requests import ConfirmRequest, LoginRequest, RegisterRequest, ResendOtpRequest
 from app.services.auth_service import AuthService
 
 
@@ -118,3 +124,48 @@ async def test_auth_service_login_with_wrong_password_fails(db_session: AsyncSes
                 password="WrongPassword123@",
             )
         )
+
+
+async def test_auth_service_resend_otp_and_rate_limit(db_session: AsyncSession) -> None:
+    user_repo = UserRepository(session=db_session)
+    wallet_repo = WalletRepository(session=db_session)
+    mock_cognito = MockCognitoClient()
+    fake_redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+
+    service = AuthService(
+        user_repo=user_repo,
+        wallet_repo=wallet_repo,
+        cognito_client=mock_cognito,
+        redis_client=fake_redis,
+    )
+
+    # 1. Unknown email raises NotFoundException and does NOT lock out rate limit
+    with pytest.raises(NotFoundException, match="not found"):
+        await service.resend_otp(ResendOtpRequest(email="unknown@example.com"))
+    assert await fake_redis.get("email:unknown@example.com:resend_limit") is None
+
+    # 2. Register user, resend succeeds and sets 60s Redis cooldown
+    await service.register(
+        RegisterRequest(
+            email="resend.test@example.com",
+            password="ValidPassword123@",
+            fullName="Resend Tester",
+        )
+    )
+    resend_res = await service.resend_otp(ResendOtpRequest(email="resend.test@example.com"))
+    assert resend_res.status == "OTP_SENT"
+    assert resend_res.retry_after == 60
+
+    # 3. Immediate second resend raises TooManyRequestsException (429)
+    with pytest.raises(TooManyRequestsException, match="wait"):
+        await service.resend_otp(ResendOtpRequest(email="resend.test@example.com"))
+
+    # 4. Confirmed user calling resend_otp raises ConflictException (409)
+    await fake_redis.delete("email:resend.test@example.com:resend_limit")
+    await service.confirm_sign_up(
+        ConfirmRequest(email="resend.test@example.com", otpCode="123456")
+    )
+    with pytest.raises(ConflictException, match="already confirmed"):
+        await service.resend_otp(ResendOtpRequest(email="resend.test@example.com"))
+
+    await fake_redis.aclose()

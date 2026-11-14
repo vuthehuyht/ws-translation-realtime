@@ -67,3 +67,9 @@ class LoginRequest(_EmailRequestBase):
 
     email: str = Field(..., pattern=EMAIL_REGEX)
     password: str
+
+
+class ResendOtpRequest(_EmailRequestBase):
+    """Payload to request resending the 6-digit registration OTP."""
+
+    email: str = Field(..., pattern=EMAIL_REGEX)

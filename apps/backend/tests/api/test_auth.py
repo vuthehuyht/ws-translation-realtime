@@ -24,6 +24,22 @@ async def test_auth_api_full_registration_and_login_flow(async_client: AsyncClie
     assert dup_resp.status_code == 409
     assert dup_resp.json()["error"]["code"] == "RESOURCE_CONFLICT"
 
+    # 2b. Resend OTP succeeds (200) and immediate retry is rate-limited (429)
+    resend_resp = await async_client.post(
+        "/api/v1/auth/resend-otp",
+        json={"email": "api.test@example.com"},
+    )
+    assert resend_resp.status_code == 200
+    assert resend_resp.json()["status"] == "OTP_SENT"
+    assert resend_resp.json()["retryAfter"] == 60
+
+    resend_spam_resp = await async_client.post(
+        "/api/v1/auth/resend-otp",
+        json={"email": "api.test@example.com"},
+    )
+    assert resend_spam_resp.status_code == 429
+    assert resend_spam_resp.json()["error"]["code"] == "RATE_LIMIT_EXCEEDED"
+
     # 3. Confirm with valid code using otpCode alias (TASK-AUTH-02)
     confirm_payload = {
         "email": "api.test@example.com",
@@ -110,3 +126,10 @@ async def test_auth_api_validation_errors(async_client: AsyncClient) -> None:
         json={"email": "wrong.otp@example.com", "otpCode": "000000"},
     )
     assert wrong_otp_resp.status_code == 422
+
+    # Resend OTP for unknown email -> 404
+    unknown_resend_resp = await async_client.post(
+        "/api/v1/auth/resend-otp",
+        json={"email": "nobody@example.com"},
+    )
+    assert unknown_resend_resp.status_code == 404

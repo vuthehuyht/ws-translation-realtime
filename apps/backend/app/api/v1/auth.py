@@ -9,11 +9,13 @@ from app.schemas.requests import (
     ConfirmRequest,
     LoginRequest,
     RegisterRequest,
+    ResendOtpRequest,
 )
 from app.schemas.responses import (
     ConfirmResponse,
     LoginResponse,
     RegisterResponse,
+    ResendOtpResponse,
 )
 from app.services.auth_service import AuthService
 
@@ -46,6 +48,20 @@ async def confirm(
 ) -> ConfirmResponse:
     """Verify registration code sent via email and initialize wallet/profile."""
     return await auth_service.confirm_sign_up(payload)
+
+
+@router.post(
+    "/resend-otp",
+    response_model=ResendOtpResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Resend 6-digit registration OTP with 60s cooldown",
+)
+async def resend_otp(
+    payload: ResendOtpRequest,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> ResendOtpResponse:
+    """Resend confirmation OTP via Cognito with Redis rate limiting."""
+    return await auth_service.resend_otp(payload)
 
 
 @router.post(

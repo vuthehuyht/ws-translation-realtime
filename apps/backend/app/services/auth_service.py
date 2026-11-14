@@ -6,9 +6,14 @@ Orchestrates Cognito integration with PostgreSQL User and Wallet repositories.
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import redis.asyncio as aioredis
 from sqlalchemy.exc import IntegrityError
 
-from app.core.exceptions import ConflictException, UnauthorizedException
+from app.core.exceptions import (
+    ConflictException,
+    TooManyRequestsException,
+    UnauthorizedException,
+)
 from app.integrations.cognito import CognitoClient, get_cognito_client
 from app.models.user import User, UserProfile
 from app.models.wallet import PaymentTransaction, Wallet
@@ -18,16 +23,19 @@ from app.schemas.requests import (
     ConfirmRequest,
     LoginRequest,
     RegisterRequest,
+    ResendOtpRequest,
 )
 from app.schemas.responses import (
     ConfirmResponse,
     LoginResponse,
     RegisterResponse,
+    ResendOtpResponse,
     TokenResponse,
     UserProfileResponse,
 )
 
 WELCOME_BONUS_AMOUNT = Decimal("2.0000")
+RESEND_OTP_COOLDOWN_SECONDS = 60
 
 
 class AuthService:
@@ -38,10 +46,12 @@ class AuthService:
         user_repo: UserRepository,
         wallet_repo: WalletRepository,
         cognito_client: CognitoClient | None = None,
+        redis_client: aioredis.Redis | None = None,
     ) -> None:
         self.user_repo = user_repo
         self.wallet_repo = wallet_repo
         self.cognito = cognito_client or get_cognito_client()
+        self.redis = redis_client
 
     async def register(self, request: RegisterRequest) -> RegisterResponse:
         """Register user in Cognito without saving to DB until OTP confirmation."""
@@ -153,6 +163,39 @@ class AuthService:
             status=result.get("status", "CONFIRMED"),
             user_sub=user_sub,
             wallet_balance=wallet.balance,
+        )
+
+    async def resend_otp(self, request: ResendOtpRequest) -> ResendOtpResponse:
+        """Resend confirmation OTP with a 60-second Redis rate limit per email."""
+        normalized_email = request.email.strip().lower()
+        rate_key = f"email:{normalized_email}:resend_limit"
+
+        if self.redis is not None:
+            acquired = await self.redis.set(
+                rate_key, "1", ex=RESEND_OTP_COOLDOWN_SECONDS, nx=True
+            )
+            if not acquired:
+                ttl = await self.redis.ttl(rate_key)
+                retry_after = ttl if ttl > 0 else RESEND_OTP_COOLDOWN_SECONDS
+                raise TooManyRequestsException(
+                    f"Please wait {retry_after} seconds before requesting another OTP",
+                    details={"retryAfter": retry_after},
+                )
+
+        try:
+            await self.cognito.resend_confirmation_code(normalized_email)
+        except TooManyRequestsException:
+            # Preserve the 60s Redis cooldown when Cognito itself throttles the request
+            raise
+        except Exception:
+            if self.redis is not None:
+                await self.redis.delete(rate_key)
+            raise
+
+        return ResendOtpResponse(
+            status="OTP_SENT",
+            email=normalized_email,
+            retry_after=RESEND_OTP_COOLDOWN_SECONDS,
         )
 
     async def login(self, request: LoginRequest) -> LoginResponse:

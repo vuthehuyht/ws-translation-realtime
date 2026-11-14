@@ -9,6 +9,7 @@ from app.core.exceptions import (
     BadGatewayException,
     ConflictException,
     NotFoundException,
+    TooManyRequestsException,
     UnauthorizedException,
     ValidationException,
 )
@@ -175,3 +176,32 @@ async def test_aws_cognito_get_user_info_and_confirm_errors() -> None:
     )
     with pytest.raises(UnauthorizedException, match="Incorrect username or password"):
         await cognito.authenticate("host@example.com", "wrong")
+
+
+async def test_aws_cognito_resend_confirmation_code() -> None:
+    mock_boto = AsyncMock()
+    mock_boto.resend_confirmation_code.return_value = {
+        "CodeDeliveryDetails": {"DeliveryMedium": "EMAIL", "Destination": "host@example.com"}
+    }
+    cognito = _make_aws_cognito_with_mock_client(mock_boto)
+
+    res = await cognito.resend_confirmation_code("host@example.com")
+    assert res["codeDeliveryDetails"]["DeliveryMedium"] == "EMAIL"
+
+    mock_boto.resend_confirmation_code.side_effect = _make_client_error(
+        "InvalidParameterException", "User is already confirmed"
+    )
+    with pytest.raises(ConflictException, match="already confirmed"):
+        await cognito.resend_confirmation_code("host@example.com")
+
+    mock_boto.resend_confirmation_code.side_effect = _make_client_error(
+        "LimitExceededException", "Attempt limit exceeded"
+    )
+    with pytest.raises(TooManyRequestsException, match="Too many OTP requests"):
+        await cognito.resend_confirmation_code("host@example.com")
+
+    mock_boto.resend_confirmation_code.side_effect = _make_client_error(
+        "UserNotFoundException", "User does not exist"
+    )
+    with pytest.raises(NotFoundException, match="not found"):
+        await cognito.resend_confirmation_code("missing@example.com")
