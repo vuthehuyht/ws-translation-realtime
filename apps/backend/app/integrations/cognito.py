@@ -9,8 +9,12 @@ import uuid
 from dataclasses import dataclass
 from typing import Any
 
+import aioboto3
+from botocore.exceptions import ClientError
+
 from app.core.config import get_settings
 from app.core.exceptions import (
+    BadGatewayException,
     ConflictException,
     NotFoundException,
     UnauthorizedException,
@@ -36,19 +40,29 @@ class CognitoClient:
     """Interface for Amazon Cognito Identity Provider operations."""
 
     async def sign_up(self, email: str, password: str, full_name: str) -> dict[str, Any]:
+        """Register a new user in Cognito."""
         raise NotImplementedError
 
     async def confirm_sign_up(self, email: str, confirmation_code: str) -> dict[str, Any]:
+        """Confirm user registration with verification code."""
         raise NotImplementedError
 
     async def resend_confirmation_code(self, email: str) -> dict[str, Any]:
+        """Resend OTP code."""
         raise NotImplementedError
 
     async def authenticate(self, email: str, password: str) -> dict[str, Any]:
+        """Authenticate user credentials."""
+        raise NotImplementedError
+
+    async def get_user_info(self, email: str) -> dict[str, str]:
+        """Fetch user attributes (sub, name) from Cognito."""
         raise NotImplementedError
 
     async def get_user_sub(self, email: str) -> str:
-        raise NotImplementedError
+        """Fetch user sub UUID."""
+        info = await self.get_user_info(email)
+        return info["sub"]
 
 
 class MockCognitoClient(CognitoClient):
@@ -73,6 +87,7 @@ class MockCognitoClient(CognitoClient):
         return {
             "userSub": user_sub,
             "userConfirmed": False,
+            "status": "CONFIRMATION_REQUIRED",
             "codeDeliveryDetails": {"Destination": email, "DeliveryMedium": "EMAIL"},
         }
 
@@ -115,11 +130,150 @@ class MockCognitoClient(CognitoClient):
             "expiresIn": 3600,
         }
 
-    async def get_user_sub(self, email: str) -> str:
+    async def get_user_info(self, email: str) -> dict[str, str]:
         user = self.users.get(email)
         if not user:
             raise NotFoundException(f"User with email '{email}' not found")
-        return user.sub
+        return {"sub": user.sub, "name": user.full_name}
+
+
+class AwsCognitoClient(CognitoClient):
+    """Production AWS Cognito Identity Provider client using aioboto3."""
+
+    def __init__(
+        self,
+        user_pool_id: str,
+        client_id: str,
+        region: str = "ap-southeast-1",
+    ) -> None:
+        self.user_pool_id = user_pool_id
+        self.client_id = client_id
+        self.region = region
+        self.session = aioboto3.Session()
+
+    async def sign_up(self, email: str, password: str, full_name: str) -> dict[str, Any]:
+        """Call AWS Cognito SignUp API with Username=email and UserAttributes."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                response = await client.sign_up(
+                    ClientId=self.client_id,
+                    Username=email,
+                    Password=password,
+                    UserAttributes=[
+                        {"Name": "email", "Value": email},
+                        {"Name": "name", "Value": full_name},
+                    ],
+                )
+                return {
+                    "userSub": response.get("UserSub"),
+                    "userConfirmed": response.get("UserConfirmed", False),
+                    "status": "CONFIRMATION_REQUIRED",
+                    "codeDeliveryDetails": response.get("CodeDeliveryDetails", {}),
+                }
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code == "UsernameExistsException":
+                    raise ConflictException(f"User with email '{email}' already exists") from e
+                if error_code in ("InvalidPasswordException", "InvalidParameterException"):
+                    raise ValidationException(error_msg) from e
+                logger.error("Cognito sign_up ClientError: %s - %s", error_code, error_msg)
+                raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
+
+    async def confirm_sign_up(self, email: str, confirmation_code: str) -> dict[str, Any]:
+        """Call AWS Cognito ConfirmSignUp API with confirmation OTP code."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                await client.confirm_sign_up(
+                    ClientId=self.client_id,
+                    Username=email,
+                    ConfirmationCode=confirmation_code,
+                )
+                return {"status": "CONFIRMED"}
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code in ("CodeMismatchException", "ExpiredCodeException"):
+                    raise ValidationException(error_msg) from e
+                if error_code == "UserNotFoundException":
+                    raise NotFoundException(f"User with email '{email}' not found") from e
+                logger.error("Cognito confirm_sign_up ClientError: %s - %s", error_code, error_msg)
+                raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
+
+    async def resend_confirmation_code(self, email: str) -> dict[str, Any]:
+        """Call AWS Cognito ResendConfirmationCode API."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                response = await client.resend_confirmation_code(
+                    ClientId=self.client_id,
+                    Username=email,
+                )
+                return {"codeDeliveryDetails": response.get("CodeDeliveryDetails", {})}
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code == "UserNotFoundException":
+                    raise NotFoundException(f"User with email '{email}' not found") from e
+                if error_code == "InvalidParameterException":
+                    raise ConflictException("User is already confirmed") from e
+                logger.error(
+                    "Cognito resend_confirmation ClientError: %s - %s",
+                    error_code,
+                    error_msg,
+                )
+                raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
+
+    async def authenticate(self, email: str, password: str) -> dict[str, Any]:
+        """Authenticate user credentials using InitiateAuth with USER_PASSWORD_AUTH."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                response = await client.initiate_auth(
+                    ClientId=self.client_id,
+                    AuthFlow="USER_PASSWORD_AUTH",
+                    AuthParameters={
+                        "USERNAME": email,
+                        "PASSWORD": password,
+                    },
+                )
+                auth_result = response.get("AuthenticationResult", {})
+                return {
+                    "accessToken": auth_result.get("AccessToken"),
+                    "idToken": auth_result.get("IdToken"),
+                    "refreshToken": auth_result.get("RefreshToken"),
+                    "expiresIn": auth_result.get("ExpiresIn", 3600),
+                }
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code in ("NotAuthorizedException", "UserNotFoundException"):
+                    raise UnauthorizedException("Incorrect username or password") from e
+                if error_code == "UserNotConfirmedException":
+                    raise UnauthorizedException("User is not confirmed. Please enter OTP") from e
+                logger.error("Cognito authenticate ClientError: %s - %s", error_code, error_msg)
+                raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
+
+    async def get_user_info(self, email: str) -> dict[str, str]:
+        """Fetch user sub and name attributes via admin_get_user."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                response = await client.admin_get_user(
+                    UserPoolId=self.user_pool_id,
+                    Username=email,
+                )
+                attrs = {
+                    attr.get("Name"): str(attr.get("Value", ""))
+                    for attr in response.get("UserAttributes", [])
+                }
+                sub = attrs.get("sub", "")
+                if not sub:
+                    raise NotFoundException(f"Sub attribute not found for user '{email}'")
+                return {"sub": sub, "name": attrs.get("name", "")}
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                if error_code == "UserNotFoundException":
+                    raise NotFoundException(f"User with email '{email}' not found") from e
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
 
 
 _cognito_instance: CognitoClient | None = None
@@ -130,10 +284,21 @@ def get_cognito_client() -> CognitoClient:
     global _cognito_instance
     if _cognito_instance is None:
         settings = get_settings()
-        if settings.app.is_local or not settings.cognito.user_pool_id.startswith("ap-southeast-1_"):
-            _cognito_instance = MockCognitoClient()
+        is_live_cognito = (
+            not settings.app.is_local
+            and bool(settings.cognito.user_pool_id)
+            and not settings.cognito.user_pool_id.endswith("_local")
+            and not settings.cognito.user_pool_id.startswith("dummy")
+            and bool(settings.cognito.client_id)
+            and not settings.cognito.client_id.startswith("local_")
+            and not settings.cognito.client_id.startswith("dummy")
+        )
+        if is_live_cognito:
+            _cognito_instance = AwsCognitoClient(
+                user_pool_id=settings.cognito.user_pool_id,
+                client_id=settings.cognito.client_id,
+            )
         else:
-            # Fallback to Mock if AWS credentials are dummy/offline
             _cognito_instance = MockCognitoClient()
     return _cognito_instance
 

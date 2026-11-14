@@ -38,15 +38,15 @@ class AuthService:
         self.cognito = cognito_client or get_cognito_client()
 
     async def register(self, request: RegisterRequest) -> RegisterResponse:
-        """Register a new user in Cognito and initialize PostgreSQL User, Profile, and Wallet."""
+        """Register user in Cognito without saving to DB until OTP confirmation."""
         normalized_email = request.email.strip().lower()
 
-        # Check for existing email in database
+        # Check for active existing email in local database
         existing_user = await self.user_repo.get_by_email(normalized_email)
-        if existing_user:
+        if existing_user and existing_user.status == "ACTIVE":
             raise ConflictException(f"User with email '{normalized_email}' already exists")
 
-        # Create Cognito user account
+        # Call AWS Cognito SignUp (sends OTP via Amazon SES)
         cognito_result = await self.cognito.sign_up(
             email=normalized_email,
             password=request.password,
@@ -54,48 +54,52 @@ class AuthService:
         )
         user_sub = cognito_result["userSub"]
 
-        # Persist User and UserProfile in PostgreSQL
-        user = User(
-            id=user_sub,
-            email=normalized_email,
-            role=request.role,
-            status="PENDING_CONFIRMATION",
-        )
-        profile = UserProfile(
-            user_id=user_sub,
-            full_name=request.full_name,
-            default_source_lang="vi-VN",
-            default_target_langs=["en-US"],
-        )
-        await self.user_repo.create_user_with_profile(user=user, profile=profile)
-
-        # Initialize default Wallet with $0.00 balance
-        wallet = Wallet(
-            host_id=user_sub,
-            balance=Decimal("0.0000"),
-            currency="USD",
-            auto_degrade_tts=True,
-            auto_topup_enabled=False,
-        )
-        await self.wallet_repo.create(wallet)
-
+        # Note: Per TASK-AUTH-01 / FR-101.1, PostgreSQL persistence of users and wallets
+        # is deferred until OTP is successfully confirmed in TASK-AUTH-02.
         return RegisterResponse(
-            user_id=user_sub,
+            status="CONFIRMATION_REQUIRED",
             email=normalized_email,
-            status="PENDING_CONFIRMATION",
+            user_sub=user_sub,
         )
 
     async def confirm_sign_up(self, request: ConfirmRequest) -> dict[str, str]:
-        """Confirm user registration with verification code."""
+        """Confirm user registration with verification code and initialize PostgreSQL records."""
         normalized_email = request.email.strip().lower()
         result = await self.cognito.confirm_sign_up(
             email=normalized_email,
             confirmation_code=request.confirmation_code,
         )
+        user_info = await self.cognito.get_user_info(normalized_email)
+        user_sub = result.get("sub") or user_info["sub"]
+        full_name = user_info.get("name") or normalized_email.split("@")[0]
 
-        # Update local user status to ACTIVE
-        user = await self.user_repo.get_by_email(normalized_email)
-        if user:
+        # Atomic PostgreSQL initialization (TASK-AUTH-02)
+        user = await self.user_repo.get_by_id(user_sub)
+        if not user:
+            user = User(
+                id=user_sub,
+                email=normalized_email,
+                role="HOST",
+                status="ACTIVE",
+            )
+            profile = UserProfile(
+                user_id=user_sub,
+                full_name=full_name,
+                default_source_lang="vi-VN",
+                default_target_langs=["en-US"],
+            )
+            await self.user_repo.create_user_with_profile(user=user, profile=profile)
+
+            # Initialize default Wallet ($0.00)
+            wallet = Wallet(
+                host_id=user_sub,
+                balance=Decimal("0.0000"),
+                currency="USD",
+                auto_degrade_tts=True,
+                auto_topup_enabled=False,
+            )
+            await self.wallet_repo.create(wallet)
+        else:
             user.status = "ACTIVE"
             await self.user_repo.update(user)
 
