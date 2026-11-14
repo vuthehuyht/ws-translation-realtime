@@ -14,18 +14,24 @@ export interface RegisterFormData {
 }
 
 interface RegisterFormProps {
-  onSubmitSuccess?: (data: RegisterFormData) => void;
+  onSubmitSuccess?: (data: RegisterFormData) => void | Promise<void>;
+  serverError?: string | null;
   className?: string;
 }
 
-export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) {
+export function RegisterForm({
+  onSubmitSuccess,
+  serverError,
+  className,
+}: RegisterFormProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [agreeTerms, setAgreeTerms] = useState(true);
+  const [agreeTerms, setAgreeTerms] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [ssoNotice, setSsoNotice] = useState<string | null>(null);
 
   // Validation error states
   const [errors, setErrors] = useState<{
@@ -38,20 +44,31 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
   const validate = (): boolean => {
     const newErrors: typeof errors = {};
 
-    if (!fullName.trim()) {
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
       newErrors.fullName = "Vui lòng nhập họ và tên của bạn";
+    } else if (trimmedName.length < 2 || trimmedName.length > 100) {
+      newErrors.fullName = "Họ và tên phải từ 2 đến 100 ký tự";
     }
 
     if (!email.trim()) {
       newErrors.email = "Vui lòng nhập địa chỉ email";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      newErrors.email = "Địa chỉ email không hợp lệ (ví dụ: host@company.com)";
+      newErrors.email = "Địa chỉ email không hợp lệ (ví dụ: name@example.com)";
     }
 
     if (!password) {
       newErrors.password = "Vui lòng nhập mật khẩu";
     } else if (password.length < 8) {
       newErrors.password = "Mật khẩu phải có ít nhất 8 ký tự";
+    } else if (
+      !/[A-Z]/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/[0-9]/.test(password) ||
+      !/[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/]/.test(password)
+    ) {
+      newErrors.password =
+        "Mật khẩu cần gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt";
     }
 
     if (!agreeTerms) {
@@ -72,11 +89,10 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
     setIsLoading(true);
 
     try {
-      // Simulate client-side registration call (or trigger Cognito callback)
       if (onSubmitSuccess) {
-        onSubmitSuccess({
+        await onSubmitSuccess({
           fullName: fullName.trim(),
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           password,
         });
       }
@@ -99,12 +115,17 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
       {/* Social SSO Authentication */}
       <SocialSsoButtons
         onGoogleClick={() => {
-          // Placeholder for Cognito Google federated sign-in
+          setSsoNotice("Đăng ký bằng Google sẽ sớm được hỗ trợ. Vui lòng dùng email.");
         }}
         onAppleClick={() => {
-          // Placeholder for Cognito Apple federated sign-in
+          setSsoNotice("Đăng ký bằng Apple sẽ sớm được hỗ trợ. Vui lòng dùng email.");
         }}
       />
+      {ssoNotice && (
+        <p role="status" className="text-xs font-medium text-muted-foreground text-center">
+          {ssoNotice}
+        </p>
+      )}
 
       {/* Elegant Divider */}
       <div className="relative flex items-center justify-center">
@@ -122,7 +143,7 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
             htmlFor="fullName"
             className="block text-xs font-semibold text-foreground"
           >
-            Họ và tên diễn giả / Host
+            Họ và tên
           </label>
           <input
             id="fullName"
@@ -161,7 +182,7 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
             name="email"
             type="email"
             autoComplete="email"
-            placeholder="host@company.com"
+            placeholder="name@example.com"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
@@ -253,6 +274,15 @@ export function RegisterForm({ onSubmitSuccess, className }: RegisterFormProps) 
             <p className="text-xs font-medium text-destructive">{errors.agreeTerms}</p>
           )}
         </div>
+
+        {serverError && (
+          <div
+            role="alert"
+            className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs font-medium text-destructive"
+          >
+            {serverError}
+          </div>
+        )}
 
         {/* Submit Button */}
         <button

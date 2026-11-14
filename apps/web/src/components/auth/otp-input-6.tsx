@@ -21,16 +21,18 @@ export function OtpInput6({
   className,
 }: OtpInput6Props) {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const onCompleteRef = useRef(onComplete);
+  onCompleteRef.current = onComplete;
 
   // Array of 6 characters
   const digits = Array.from({ length: 6 }, (_, i) => value[i] || "");
 
   useEffect(() => {
-    // If completed 6 digits, call onComplete
-    if (value.length === 6 && onComplete) {
-      onComplete(value);
+    // Only trigger onComplete when value reaches 6 digits (ref avoids re-firing on callback identity changes)
+    if (value.length === 6 && onCompleteRef.current) {
+      onCompleteRef.current(value);
     }
-  }, [value, onComplete]);
+  }, [value]);
 
   const handleChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/[^0-9]/g, "");

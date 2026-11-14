@@ -63,7 +63,7 @@ describe("RegisterForm component", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows validation error when terms are unchecked", async () => {
+  it("shows validation error when terms are unchecked by default", async () => {
     render(<RegisterForm />);
     const nameInput = screen.getByLabelText(/Họ và tên/i);
     const emailInput = screen.getByLabelText(/Địa chỉ Email/i);
@@ -75,10 +75,11 @@ describe("RegisterForm component", () => {
       name: "Tạo tài khoản",
     });
 
+    expect(termsCheckbox).not.toBeChecked();
+
     fireEvent.change(nameInput, { target: { value: "Nguyen Van A" } });
     fireEvent.change(emailInput, { target: { value: "test@example.com" } });
     fireEvent.change(passwordInput, { target: { value: "Password123!" } });
-    fireEvent.click(termsCheckbox); // uncheck terms
     fireEvent.click(submitBtn);
 
     expect(
@@ -99,6 +100,9 @@ describe("RegisterForm component", () => {
     fireEvent.change(screen.getByLabelText(/^Mật khẩu/i), {
       target: { value: "P@ssword2026!" },
     });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Điều khoản Dịch vụ/i })
+    );
 
     const submitBtn = screen.getByRole("button", {
       name: "Tạo tài khoản",
@@ -112,5 +116,39 @@ describe("RegisterForm component", () => {
         password: "P@ssword2026!",
       });
     });
+  });
+
+  it("renders serverError alert when provided", () => {
+    render(
+      <RegisterForm serverError="Email này đã được đăng ký." />
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Email này đã được đăng ký."
+    );
+  });
+
+  it("validates password complexity before submitting", async () => {
+    const handleSuccess = vi.fn();
+    render(<RegisterForm onSubmitSuccess={handleSuccess} />);
+
+    fireEvent.change(screen.getByLabelText(/Họ và tên/i), {
+      target: { value: "Nguyen Van A" },
+    });
+    fireEvent.change(screen.getByLabelText(/Địa chỉ Email/i), {
+      target: { value: "host@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Mật khẩu/i), {
+      target: { value: "password123" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Điều khoản Dịch vụ/i })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tạo tài khoản" }));
+
+    expect(
+      await screen.findByText(/Mật khẩu cần gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt/i)
+    ).toBeInTheDocument();
+    expect(handleSuccess).not.toHaveBeenCalled();
   });
 });

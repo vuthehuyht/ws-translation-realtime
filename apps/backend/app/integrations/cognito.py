@@ -5,6 +5,7 @@ with automatic offline mock support for local and test environments.
 """
 
 import logging
+import os
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -146,11 +147,20 @@ class AwsCognitoClient(CognitoClient):
         user_pool_id: str,
         client_id: str,
         region: str = "ap-southeast-1",
+        aws_access_key_id: str | None = None,
+        aws_secret_access_key: str | None = None,
+        aws_session_token: str | None = None,
     ) -> None:
         self.user_pool_id = user_pool_id
         self.client_id = client_id
         self.region = region
-        self.session = aioboto3.Session()
+        session_kwargs: dict[str, str] = {"region_name": region}
+        if aws_access_key_id and aws_secret_access_key:
+            session_kwargs["aws_access_key_id"] = aws_access_key_id
+            session_kwargs["aws_secret_access_key"] = aws_secret_access_key
+            if aws_session_token:
+                session_kwargs["aws_session_token"] = aws_session_token
+        self.session = aioboto3.Session(**session_kwargs)
 
     async def sign_up(self, email: str, password: str, full_name: str) -> dict[str, Any]:
         """Call AWS Cognito SignUp API with Username=email and UserAttributes."""
@@ -307,12 +317,12 @@ _cognito_instance: CognitoClient | None = None
 
 
 def get_cognito_client() -> CognitoClient:
-    """Retrieve singleton CognitoClient instance (returns MockCognitoClient for local/test)."""
+    """Retrieve singleton CognitoClient (MockCognitoClient for test or placeholder config)."""
     global _cognito_instance
     if _cognito_instance is None:
         settings = get_settings()
         is_live_cognito = (
-            not settings.app.is_local
+            settings.env != "test"
             and bool(settings.cognito.user_pool_id)
             and not settings.cognito.user_pool_id.endswith("_local")
             and not settings.cognito.user_pool_id.startswith("dummy")
@@ -324,6 +334,10 @@ def get_cognito_client() -> CognitoClient:
             _cognito_instance = AwsCognitoClient(
                 user_pool_id=settings.cognito.user_pool_id,
                 client_id=settings.cognito.client_id,
+                region=settings.aws_region,
+                aws_access_key_id=settings.aws_access_key_id,
+                aws_secret_access_key=settings.aws_secret_access_key,
+                aws_session_token=os.getenv("AWS_SESSION_TOKEN"),
             )
         else:
             _cognito_instance = MockCognitoClient()
