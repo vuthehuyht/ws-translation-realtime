@@ -11,6 +11,7 @@ from app.schemas.requests import (
     RegisterRequest,
 )
 from app.schemas.responses import (
+    ConfirmResponse,
     LoginResponse,
     RegisterResponse,
 )
@@ -35,15 +36,15 @@ async def register(
 
 @router.post(
     "/confirm",
-    response_model=dict[str, str],
+    response_model=ConfirmResponse,
     status_code=status.HTTP_200_OK,
     summary="Confirm registration with 6-digit OTP",
 )
 async def confirm(
     payload: ConfirmRequest,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
-) -> dict[str, str]:
-    """Verify registration code sent via email."""
+) -> ConfirmResponse:
+    """Verify registration code sent via email and initialize wallet/profile."""
     return await auth_service.confirm_sign_up(payload)
 
 

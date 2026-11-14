@@ -135,8 +135,40 @@ async def test_aws_cognito_get_user_info_and_confirm_errors() -> None:
     mock_boto.confirm_sign_up.side_effect = _make_client_error(
         "CodeMismatchException", "Bad code"
     )
+    mock_boto.admin_get_user.side_effect = None
+    mock_boto.admin_get_user.return_value = {"UserStatus": "UNCONFIRMED", "UserAttributes": []}
     with pytest.raises(ValidationException, match="Bad code"):
         await cognito.confirm_sign_up("host@example.com", "000000")
+
+    # Idempotent confirm when Cognito user is already CONFIRMED (CodeMismatchException)
+    mock_boto.confirm_sign_up.side_effect = _make_client_error(
+        "CodeMismatchException", "Invalid code provided, please request a code again."
+    )
+    mock_boto.admin_get_user.return_value = {
+        "UserStatus": "CONFIRMED",
+        "UserAttributes": [
+            {"Name": "sub", "Value": "sub-aws-456"},
+            {"Name": "name", "Value": "Nguyễn Văn A"},
+        ],
+    }
+    idempotent_res = await cognito.confirm_sign_up("host@example.com", "123456")
+    assert idempotent_res == {
+        "status": "CONFIRMED",
+        "sub": "sub-aws-456",
+        "name": "Nguyễn Văn A",
+    }
+
+    # Idempotent confirm when Cognito raises NotAuthorizedException for CONFIRMED user
+    mock_boto.confirm_sign_up.side_effect = _make_client_error(
+        "NotAuthorizedException", "User cannot be confirmed. Current status is CONFIRMED"
+    )
+    idempotent_not_auth = await cognito.confirm_sign_up("host@example.com", "123456")
+    assert idempotent_not_auth["status"] == "CONFIRMED"
+
+    # NotAuthorizedException when user is still UNCONFIRMED raises UnauthorizedException
+    mock_boto.admin_get_user.return_value = {"UserStatus": "UNCONFIRMED", "UserAttributes": []}
+    with pytest.raises(UnauthorizedException, match="cannot be confirmed"):
+        await cognito.confirm_sign_up("host@example.com", "123456")
 
     mock_boto.initiate_auth.side_effect = _make_client_error(
         "NotAuthorizedException", "Wrong password"

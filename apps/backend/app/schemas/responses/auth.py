@@ -1,5 +1,7 @@
 """Authentication Response Schemas."""
 
+from decimal import Decimal
+
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
@@ -20,6 +22,17 @@ class RegisterResponse(BaseModel):
     def user_id(self) -> str:
         """Alias for backward compatibility."""
         return self.user_sub
+
+
+class ConfirmResponse(BaseModel):
+    """Response returned upon OTP confirmation and wallet initialization."""
+
+    status: str = "CONFIRMED"
+    user_sub: str = Field(..., alias="userSub")
+    wallet_balance: Decimal = Field(..., alias="walletBalance")
+    currency: str = "USD"
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class TokenResponse(BaseModel):

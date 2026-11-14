@@ -2,7 +2,7 @@
 
 import re
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
 # Standard RFC 5322 compatible email pattern
 EMAIL_REGEX = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
@@ -51,7 +51,15 @@ class ConfirmRequest(_EmailRequestBase):
     """Payload to confirm registration with OTP code."""
 
     email: str = Field(..., pattern=EMAIL_REGEX)
-    confirmation_code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+    confirmation_code: str = Field(
+        ...,
+        min_length=6,
+        max_length=6,
+        pattern=r"^\d{6}$",
+        validation_alias=AliasChoices("otpCode", "confirmation_code", "confirmationCode"),
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class LoginRequest(_EmailRequestBase):

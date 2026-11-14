@@ -24,14 +24,21 @@ async def test_auth_api_full_registration_and_login_flow(async_client: AsyncClie
     assert dup_resp.status_code == 409
     assert dup_resp.json()["error"]["code"] == "RESOURCE_CONFLICT"
 
-    # 3. Confirm with valid code (TASK-AUTH-02)
+    # 3. Confirm with valid code using otpCode alias (TASK-AUTH-02)
     confirm_payload = {
         "email": "api.test@example.com",
-        "confirmation_code": "123456",
+        "otpCode": "123456",
     }
     confirm_resp = await async_client.post("/api/v1/auth/confirm", json=confirm_payload)
     assert confirm_resp.status_code == 200
-    assert confirm_resp.json()["status"] == "CONFIRMED"
+    confirm_data = confirm_resp.json()
+    assert confirm_data["status"] == "CONFIRMED"
+    assert confirm_data["walletBalance"] == "2.0000"
+
+    # Idempotent second confirmation returns 200 without duplicate key error
+    confirm_resp_2 = await async_client.post("/api/v1/auth/confirm", json=confirm_payload)
+    assert confirm_resp_2.status_code == 200
+    assert confirm_resp_2.json()["walletBalance"] == "2.0000"
 
     # 4. Login after confirmation
     login_payload = {
@@ -81,3 +88,25 @@ async def test_auth_api_validation_errors(async_client: AsyncClient) -> None:
         },
     )
     assert no_upper_resp.status_code == 422
+
+    # Confirm with unknown email -> 404
+    unknown_confirm_resp = await async_client.post(
+        "/api/v1/auth/confirm",
+        json={"email": "nobody@example.com", "otpCode": "123456"},
+    )
+    assert unknown_confirm_resp.status_code == 404
+
+    # Register a user then confirm with wrong OTP -> 422
+    await async_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "wrong.otp@example.com",
+            "password": "ValidPassword123@",
+            "fullName": "Wrong OTP User",
+        },
+    )
+    wrong_otp_resp = await async_client.post(
+        "/api/v1/auth/confirm",
+        json={"email": "wrong.otp@example.com", "otpCode": "000000"},
+    )
+    assert wrong_otp_resp.status_code == 422
