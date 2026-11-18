@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
+import { SiteFooter } from "@/components/layout/site-footer";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "WS Translation - Realtime AI Speech-to-Speech Translation",
+  title: "VoiceBridge AI - Realtime AI Speech-to-Speech Translation",
   description: "Sub-500ms real-time speech translation powered by AWS Transcribe, Translate, and Polly Neural",
 };
 
@@ -14,10 +15,11 @@ export default function RootLayout({
   return (
     <html lang="vi" suppressHydrationWarning>
       <body
-        className="antialiased min-h-screen bg-background text-foreground font-sans"
+        className="flex min-h-screen flex-col bg-background font-sans text-foreground antialiased"
         suppressHydrationWarning
       >
-        {children}
+        <div className="flex flex-1 flex-col">{children}</div>
+        <SiteFooter />
       </body>
     </html>
   );

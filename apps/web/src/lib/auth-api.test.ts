@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api-client";
-import { confirmRegistration, registerHost, resendOtp } from "./auth-api";
+import {
+  confirmRegistration,
+  loginHost,
+  registerHost,
+  resendOtp,
+} from "./auth-api";
 
 describe("auth-api", () => {
   afterEach(() => {
@@ -89,5 +94,50 @@ describe("auth-api", () => {
     const err = new ApiError(409, "RESOURCE_CONFLICT", "Exists");
     expect(err).toBeInstanceOf(Error);
     expect(err.status).toBe(409);
+  });
+
+  it("calls POST /api/v1/auth/login and returns tokens and user profile", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          tokens: {
+            accessToken: "acc-token",
+            idToken: "id-token",
+            refreshToken: "ref-token",
+            expiresIn: 3600,
+            tokenType: "Bearer",
+          },
+          user: {
+            id: "user-1",
+            email: "host@example.com",
+            role: "HOST",
+            status: "ACTIVE",
+            fullName: "Host User",
+            defaultSourceLang: "vi-VN",
+            defaultTargetLangs: ["en-US"],
+            timezone: "Asia/Ho_Chi_Minh",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const res = await loginHost({
+      email: "host@example.com",
+      password: "Password123!",
+    });
+
+    expect(res.tokens.accessToken).toBe("acc-token");
+    expect(res.user.email).toBe("host@example.com");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/auth/login",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          email: "host@example.com",
+          password: "Password123!",
+        }),
+      })
+    );
   });
 });
