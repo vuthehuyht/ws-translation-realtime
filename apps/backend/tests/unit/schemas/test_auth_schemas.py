@@ -120,7 +120,6 @@ def test_login_request_and_response_serialization() -> None:
     tokens = TokenResponse(
         accessToken="access_token_123",
         idToken="id_token_123",
-        refreshToken="refresh_token_123",
         expiresIn=3600,
     )
     user_profile = UserProfileResponse(
@@ -134,6 +133,7 @@ def test_login_request_and_response_serialization() -> None:
 
     res_dict = login_res.model_dump(by_alias=True)
     assert res_dict["tokens"]["accessToken"] == "access_token_123"
+    assert "refreshToken" not in res_dict["tokens"]
     assert res_dict["user"]["fullName"] == "Host User"
 
 

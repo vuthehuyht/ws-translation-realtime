@@ -68,12 +68,13 @@ export function resendOtp(
 export interface LoginHostPayload {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface LoginTokens {
   accessToken: string;
   idToken: string;
-  refreshToken: string;
+  refreshToken?: string | null;
   expiresIn: number;
   tokenType: string;
 }
@@ -94,11 +95,24 @@ export interface LoginHostResponse {
   user: UserProfile;
 }
 
+export interface RefreshSessionResponse {
+  tokens: LoginTokens;
+  user: UserProfile;
+}
+
 export function loginHost(
   payload: LoginHostPayload
 ): Promise<LoginHostResponse> {
   return apiRequest<LoginHostResponse>("/api/v1/auth/login", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function refreshHostSession(): Promise<RefreshSessionResponse> {
+  return apiRequest<RefreshSessionResponse>("/api/v1/auth/refresh", {
+    method: "POST",
+    body: JSON.stringify({}),
+    skipAuthRefresh: true,
   });
 }

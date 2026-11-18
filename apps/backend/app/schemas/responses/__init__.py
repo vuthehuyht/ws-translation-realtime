@@ -3,6 +3,7 @@
 from app.schemas.responses.auth import (
     ConfirmResponse,
     LoginResponse,
+    RefreshResponse,
     RegisterResponse,
     ResendOtpResponse,
     TokenResponse,
@@ -14,6 +15,7 @@ __all__ = [
     "ConfirmResponse",
     "HealthResponse",
     "LoginResponse",
+    "RefreshResponse",
     "RegisterResponse",
     "ResendOtpResponse",
     "TokenResponse",

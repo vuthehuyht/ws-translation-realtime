@@ -107,6 +107,6 @@ async def get_current_user(
     user = await user_repo.get_by_id(user_id)
     if not user:
         raise UnauthorizedException("User does not exist or has been removed")
-    if user.status == "SUSPENDED":
-        raise ForbiddenException("User account is currently suspended")
+    if user.status != "ACTIVE":
+        raise ForbiddenException("User account is not active or is suspended")
     return user

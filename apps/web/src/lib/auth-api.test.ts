@@ -3,6 +3,7 @@ import { ApiError } from "./api-client";
 import {
   confirmRegistration,
   loginHost,
+  refreshHostSession,
   registerHost,
   resendOtp,
 } from "./auth-api";
@@ -133,10 +134,48 @@ describe("auth-api", () => {
       "http://localhost:8000/api/v1/auth/login",
       expect.objectContaining({
         method: "POST",
+        credentials: "include",
         body: JSON.stringify({
           email: "host@example.com",
           password: "Password123!",
         }),
+      })
+    );
+  });
+
+  it("calls POST /api/v1/auth/refresh with credentials include", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          tokens: {
+            accessToken: "new-acc",
+            idToken: "new-id",
+            refreshToken: null,
+            expiresIn: 3600,
+            tokenType: "Bearer",
+          },
+          user: {
+            id: "user-1",
+            email: "host@example.com",
+            role: "HOST",
+            status: "ACTIVE",
+            fullName: "Host User",
+            defaultSourceLang: "vi-VN",
+            defaultTargetLangs: ["en-US"],
+            timezone: "Asia/Ho_Chi_Minh",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const res = await refreshHostSession();
+    expect(res.tokens.accessToken).toBe("new-acc");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/auth/refresh",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
       })
     );
   });

@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  AUTH_REMEMBER_ME_KEY,
   AUTH_SESSION_STORAGE_KEY,
   clearAuthSession,
   getAuthSession,
+  getRememberMePreference,
   saveAuthSession,
   type AuthSession,
 } from "./auth-storage";
@@ -49,7 +51,7 @@ describe("auth-storage", () => {
     expect(window.sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull();
   });
 
-  it("returns null and clears storage once the access token expires", () => {
+  it("returns null and clears storage once the access token expires while preserving rememberMe", () => {
     saveAuthSession(SAMPLE_SESSION, true);
 
     vi.advanceTimersByTime(3600 * 1000 + 1);
@@ -57,6 +59,7 @@ describe("auth-storage", () => {
     expect(getAuthSession()).toBeNull();
     expect(window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull();
     expect(window.sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull();
+    expect(getRememberMePreference()).toBe(true);
   });
 
   it("clears both localStorage and sessionStorage on clearAuthSession", () => {
@@ -85,5 +88,19 @@ describe("auth-storage", () => {
     expect(getAuthSession()).toBeNull();
     expect(window.sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull();
     expect(window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull();
+  });
+
+  it("strips refreshToken from Web Storage and preserves rememberMe preference", () => {
+    saveAuthSession(SAMPLE_SESSION, true);
+
+    const raw = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+    expect(raw).not.toBeNull();
+    expect(JSON.parse(raw as string).tokens.refreshToken).toBeUndefined();
+    expect(window.localStorage.getItem(AUTH_REMEMBER_ME_KEY)).toBe("1");
+    expect(getRememberMePreference()).toBe(true);
+
+    clearAuthSession();
+    expect(getRememberMePreference()).toBe(false);
+    expect(window.localStorage.getItem(AUTH_REMEMBER_ME_KEY)).toBeNull();
   });
 });

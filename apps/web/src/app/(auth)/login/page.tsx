@@ -29,6 +29,7 @@ function LoginPageContent() {
       const response = await loginHost({
         email: data.email,
         password: data.password,
+        rememberMe: Boolean(data.rememberMe),
       });
 
       saveAuthSession(

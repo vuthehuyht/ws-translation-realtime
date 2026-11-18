@@ -2,9 +2,17 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi.responses import JSONResponse
 
 from app.api.deps import get_auth_service
+from app.core.config import get_settings
+from app.core.exceptions import (
+    ForbiddenException,
+    UnauthorizedException,
+    ValidationException,
+    build_app_error_response,
+)
 from app.schemas.requests import (
     ConfirmRequest,
     LoginRequest,
@@ -14,12 +22,69 @@ from app.schemas.requests import (
 from app.schemas.responses import (
     ConfirmResponse,
     LoginResponse,
+    RefreshResponse,
     RegisterResponse,
     ResendOtpResponse,
 )
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+REFRESH_COOKIE_NAME = "ws_refresh_token"
+REMEMBER_COOKIE_NAME = "ws_remember_me"
+AUTH_COOKIE_PATH = "/api/v1/auth"
+
+
+def _set_refresh_cookies(
+    response: Response,
+    refresh_token: str,
+    remember_me: bool,
+) -> None:
+    """Persist refresh token in an HttpOnly cookie scoped to /api/v1/auth."""
+    settings = get_settings()
+    secure = not settings.app.is_local
+    max_age = settings.security.refresh_token_expire_days * 86400 if remember_me else None
+    response.set_cookie(
+        key=REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        max_age=max_age,
+        path=AUTH_COOKIE_PATH,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    if remember_me:
+        response.set_cookie(
+            key=REMEMBER_COOKIE_NAME,
+            value="1",
+            max_age=max_age,
+            path=AUTH_COOKIE_PATH,
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+        )
+    else:
+        response.delete_cookie(
+            key=REMEMBER_COOKIE_NAME,
+            path=AUTH_COOKIE_PATH,
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+        )
+
+
+def _clear_refresh_cookies(response: Response) -> None:
+    """Expire auth cookies on the response when a refresh token is rejected."""
+    settings = get_settings()
+    secure = not settings.app.is_local
+    for cookie_name in (REFRESH_COOKIE_NAME, REMEMBER_COOKIE_NAME):
+        response.delete_cookie(
+            key=cookie_name,
+            path=AUTH_COOKIE_PATH,
+            httponly=True,
+            secure=secure,
+            samesite="lax",
+        )
 
 
 @router.post(
@@ -72,7 +137,50 @@ async def resend_otp(
 )
 async def login(
     payload: LoginRequest,
+    response: Response,
     auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ) -> LoginResponse:
-    """Authenticate email and password against Cognito."""
-    return await auth_service.login(payload)
+    """Authenticate email and password against Cognito and set HttpOnly refresh cookie."""
+    result = await auth_service.login(payload)
+    _set_refresh_cookies(
+        response=response,
+        refresh_token=result.refresh_token,
+        remember_me=payload.remember_me,
+    )
+    return result.response
+
+
+@router.post(
+    "/refresh",
+    response_model=RefreshResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Silently refresh AccessToken and IdToken using the HttpOnly refresh cookie",
+)
+async def refresh(
+    request: Request,
+    response: Response,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> RefreshResponse | JSONResponse:
+    """Exchange the HttpOnly refresh cookie for fresh AccessToken, IdToken, and user profile."""
+    # Cookie-only on purpose: accepting a body token would let a script that obtained the
+    # refresh token elsewhere bypass the HttpOnly protection.
+    refresh_token = (request.cookies.get(REFRESH_COOKIE_NAME) or "").strip()
+
+    try:
+        result = await auth_service.refresh_session(refresh_token)
+    except (UnauthorizedException, ForbiddenException, ValidationException) as exc:
+        # Attach Set-Cookie deletions directly on the error JSONResponse because FastAPI
+        # exception handlers create a new response object and discard prior Response mutations.
+        error_response = build_app_error_response(exc)
+        _clear_refresh_cookies(error_response)
+        return error_response
+
+    if result.refresh_token:
+        remember_me = request.cookies.get(REMEMBER_COOKIE_NAME) == "1"
+        _set_refresh_cookies(
+            response=response,
+            refresh_token=result.refresh_token,
+            remember_me=remember_me,
+        )
+
+    return result.response

@@ -8,7 +8,7 @@ import os
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 EnvironmentType = Literal["local", "test", "dev", "staging", "production"]
@@ -152,6 +152,13 @@ class Settings(BaseSettings):
     # Security
     jwt_secret_key: str = "default-insecure-dev-jwt-secret-key-32chars-min!"  # noqa: S105
     jwt_algorithm: str = "HS256"
+
+    @model_validator(mode="after")
+    def _reject_wildcard_cors_outside_local(self) -> "Settings":
+        """Fail fast: CORS runs with credentials (HttpOnly refresh cookie), so '*' is unsafe."""
+        if self.env not in ("local", "test") and "*" in self.cors_origins:
+            raise ValueError("cors_origins must list explicit origins outside local/test")
+        return self
 
     # Domain models
     @property

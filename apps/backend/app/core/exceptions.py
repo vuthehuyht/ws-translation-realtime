@@ -139,21 +139,26 @@ class TooManyRequestsException(AppException):
         )
 
 
+def build_app_error_response(exc: AppException) -> JSONResponse:
+    """Build a standardized RFC 7807 JSONResponse from an AppException."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "code": exc.error_code,
+                "message": exc.message,
+                "details": exc.details,
+            }
+        },
+    )
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register uniform RFC 7807 JSON error handlers on the FastAPI application."""
 
     @app.exception_handler(AppException)
     async def app_exception_handler(_request: Request, exc: AppException) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={
-                "error": {
-                    "code": exc.error_code,
-                    "message": exc.message,
-                    "details": exc.details,
-                }
-            },
-        )
+        return build_app_error_response(exc)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
