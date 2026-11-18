@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, apiRequest } from "./api-client";
+import { ApiError, apiRequest, getApiBaseUrl } from "./api-client";
 import { getAuthSession, saveAuthSession, type AuthSession } from "./auth-storage";
 
 const SAMPLE_SESSION: AuthSession = {
@@ -136,5 +136,12 @@ describe("api-client", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:8000/api/v1/auth/refresh");
+  });
+
+  it("uses same-origin relative URLs in production when NEXT_PUBLIC_API_URL is unset", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+    expect(getApiBaseUrl()).toBe("");
+    vi.unstubAllEnvs();
   });
 });

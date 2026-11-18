@@ -143,11 +143,7 @@ export function VerifyOtpForm({
             Kích hoạt tài khoản thành công!
           </h2>
           <p className="text-sm text-muted-foreground">
-            Ví Host của bạn đã được khởi tạo với{" "}
-            <span className="font-semibold text-emerald-600">
-              ${Number(verifiedResponse.walletBalance).toFixed(2)} {verifiedResponse.currency}
-            </span>{" "}
-            Welcome Bonus. Đang chuyển sang trang đăng nhập...
+            Tài khoản và Ví Host của bạn đã sẵn sàng. Đang chuyển sang trang đăng nhập...
           </p>
         </div>
         <Link

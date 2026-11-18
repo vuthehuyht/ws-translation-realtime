@@ -13,14 +13,11 @@ describe("VerifyOtpForm", () => {
     vi.useRealTimers();
   });
 
-  it("auto-submits 6-digit OTP and displays $2.00 Welcome Bonus on success", async () => {
+  it("auto-submits 6-digit OTP and shows confirmation success", async () => {
     const confirmSpy = vi
       .spyOn(authApi, "confirmRegistration")
       .mockResolvedValueOnce({
         status: "CONFIRMED",
-        userSub: "sub-123",
-        walletBalance: "2.0000",
-        currency: "USD",
       });
     const onVerified = vi.fn();
 
@@ -43,7 +40,7 @@ describe("VerifyOtpForm", () => {
     expect(
       await screen.findByText(/Kích hoạt tài khoản thành công!/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/\$2\.00 USD/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ví Host của bạn đã sẵn sàng/i)).toBeInTheDocument();
     expect(onVerified).toHaveBeenCalledTimes(1);
   });
 

@@ -51,9 +51,6 @@ describe("Full Registration Flow (RegisterPage -> VerifyOtpPage)", () => {
         new Response(
           JSON.stringify({
             status: "CONFIRMED",
-            userSub: "sub-flow-1",
-            walletBalance: "2.0000",
-            currency: "USD",
           }),
           { status: 200, headers: { "Content-Type": "application/json" } }
         )
@@ -130,7 +127,7 @@ describe("Full Registration Flow (RegisterPage -> VerifyOtpPage)", () => {
     expect(
       screen.getByText(/Kích hoạt tài khoản thành công!/i)
     ).toBeInTheDocument();
-    expect(screen.getByText(/\$2\.00 USD/i)).toBeInTheDocument();
+    expect(screen.getByText(/Ví Host của bạn đã sẵn sàng/i)).toBeInTheDocument();
 
     await act(async () => {
       vi.advanceTimersByTime(1200);

@@ -27,7 +27,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Force standalone output in Docker container
+# Force standalone output in Docker container; default NEXT_PUBLIC_API_URL to ""
+# so production browser requests use same-origin ALB routing (/api/* -> backend).
+ARG NEXT_PUBLIC_API_URL=""
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 ENV NEXT_OUTPUT_STANDALONE=true
 ENV NODE_ENV=production
 

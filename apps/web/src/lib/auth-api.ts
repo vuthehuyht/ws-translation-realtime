@@ -10,7 +10,7 @@ export interface RegisterHostPayload {
 export interface RegisterHostResponse {
   status: string;
   email: string;
-  userSub: string;
+  userSub?: string | null;
 }
 
 export interface ConfirmOtpPayload {
@@ -20,9 +20,6 @@ export interface ConfirmOtpPayload {
 
 export interface ConfirmOtpResponse {
   status: string;
-  userSub: string;
-  walletBalance: string;
-  currency: string;
 }
 
 export interface ResendOtpPayload {
