@@ -54,6 +54,7 @@ resource "aws_cognito_user_pool_client" "web_client" {
   user_pool_id = aws_cognito_user_pool.hosts.id
 
   generate_secret               = false
+  enable_token_revocation       = true
   prevent_user_existence_errors = "ENABLED"
   explicit_auth_flows = [
     "ALLOW_USER_SRP_AUTH",
@@ -61,8 +62,8 @@ resource "aws_cognito_user_pool_client" "web_client" {
     "ALLOW_USER_PASSWORD_AUTH",
   ]
   supported_identity_providers         = ["COGNITO"]
-  callback_urls                        = ["http://localhost:3000/api/auth/callback"]
-  logout_urls                          = ["http://localhost:3000/login"]
+  callback_urls                        = var.callback_urls
+  logout_urls                          = var.logout_urls
   allowed_oauth_flows                  = ["code"]
   allowed_oauth_scopes                 = ["email", "openid", "profile"]
   allowed_oauth_flows_user_pool_client = true

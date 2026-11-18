@@ -3,6 +3,7 @@
 Orchestrates Cognito integration with PostgreSQL User and Wallet repositories.
 """
 
+import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -10,11 +11,13 @@ from decimal import Decimal
 
 import jwt
 import redis.asyncio as aioredis
+from redis.exceptions import RedisError
 from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import (
     ConflictException,
     ForbiddenException,
+    NotFoundException,
     ServiceUnavailableException,
     TooManyRequestsException,
     UnauthorizedException,
@@ -43,6 +46,7 @@ from app.services import token_blocklist
 
 WELCOME_BONUS_AMOUNT = Decimal("2.0000")
 RESEND_OTP_COOLDOWN_SECONDS = 60
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,28 +81,35 @@ class AuthService:
         self.redis = redis_client
 
     async def register(self, request: RegisterRequest) -> RegisterResponse:
-        """Register user in Cognito without saving to DB until OTP confirmation."""
+        """Register user in Cognito without exposing account existence or userSub."""
         normalized_email = request.email.strip().lower()
 
-        # Check for active existing email in local database
+        # Return the same non-committal response when the email already exists so callers
+        # cannot enumerate registered accounts or obtain an existing userSub.
         existing_user = await self.user_repo.get_by_email(normalized_email)
         if existing_user and existing_user.status == "ACTIVE":
-            raise ConflictException(f"User with email '{normalized_email}' already exists")
+            return RegisterResponse(
+                status="CONFIRMATION_REQUIRED",
+                email=normalized_email,
+            )
 
-        # Call AWS Cognito SignUp (sends OTP via Amazon SES)
-        cognito_result = await self.cognito.sign_up(
-            email=normalized_email,
-            password=request.password,
-            full_name=request.full_name,
-        )
-        user_sub = cognito_result["userSub"]
+        try:
+            await self.cognito.sign_up(
+                email=normalized_email,
+                password=request.password,
+                full_name=request.full_name,
+            )
+        except ConflictException:
+            return RegisterResponse(
+                status="CONFIRMATION_REQUIRED",
+                email=normalized_email,
+            )
 
         # Note: Per TASK-AUTH-01 / FR-101.1, PostgreSQL persistence of users and wallets
         # is deferred until OTP is successfully confirmed in TASK-AUTH-02.
         return RegisterResponse(
             status="CONFIRMATION_REQUIRED",
             email=normalized_email,
-            user_sub=user_sub,
         )
 
     async def confirm_sign_up(self, request: ConfirmRequest) -> ConfirmResponse:
@@ -184,8 +195,6 @@ class AuthService:
 
         return ConfirmResponse(
             status=result.get("status", "CONFIRMED"),
-            user_sub=user_sub,
-            wallet_balance=wallet.balance,
         )
 
     async def resend_otp(self, request: ResendOtpRequest) -> ResendOtpResponse:
@@ -194,25 +203,42 @@ class AuthService:
         rate_key = f"email:{normalized_email}:resend_limit"
 
         if self.redis is not None:
-            acquired = await self.redis.set(
-                rate_key, "1", ex=RESEND_OTP_COOLDOWN_SECONDS, nx=True
-            )
-            if not acquired:
-                ttl = await self.redis.ttl(rate_key)
-                retry_after = ttl if ttl > 0 else RESEND_OTP_COOLDOWN_SECONDS
-                raise TooManyRequestsException(
-                    f"Please wait {retry_after} seconds before requesting another OTP",
-                    details={"retryAfter": retry_after},
+            try:
+                acquired = await self.redis.set(
+                    rate_key, "1", ex=RESEND_OTP_COOLDOWN_SECONDS, nx=True
                 )
+                if not acquired:
+                    ttl = await self.redis.ttl(rate_key)
+                    retry_after = ttl if ttl > 0 else RESEND_OTP_COOLDOWN_SECONDS
+                    raise TooManyRequestsException(
+                        f"Please wait {retry_after} seconds before requesting another OTP",
+                        details={"retryAfter": retry_after},
+                    )
+            except RedisError as exc:
+                raise ServiceUnavailableException(
+                    "Rate limit store is temporarily unavailable"
+                ) from exc
 
         try:
             await self.cognito.resend_confirmation_code(normalized_email)
+        except (NotFoundException, ConflictException):
+            # Return the same 200 response for unknown or already-confirmed emails to block
+            # account enumeration while preserving the 60s cooldown against abuse.
+            return ResendOtpResponse(
+                status="OTP_SENT",
+                email=normalized_email,
+                retry_after=RESEND_OTP_COOLDOWN_SECONDS,
+            )
         except TooManyRequestsException:
             # Preserve the 60s Redis cooldown when Cognito itself throttles the request
             raise
         except Exception:
             if self.redis is not None:
-                await self.redis.delete(rate_key)
+                try:
+                    await self.redis.delete(rate_key)
+                except RedisError as redis_exc:
+                    # Never mask the original Cognito error when Redis cleanup also fails.
+                    logger.warning("Failed to roll back resend_otp cooldown key: %s", redis_exc)
             raise
 
         return ResendOtpResponse(
@@ -242,9 +268,7 @@ class AuthService:
         # Retrieve user and profile from database
         user = await self.user_repo.get_by_email(normalized_email)
         if not user:
-            raise UnauthorizedException(
-                f"User with email '{normalized_email}' not found in database"
-            )
+            raise UnauthorizedException("Incorrect username or password")
         self._ensure_active(user)
 
         return LoginResult(
@@ -345,7 +369,7 @@ class AuthService:
 
         user = await self.user_repo.get_by_id(sub)
         if not user:
-            raise UnauthorizedException(f"User '{sub}' not found in database")
+            raise UnauthorizedException("Session is invalid")
         self._ensure_active(user)
 
         return RefreshResult(

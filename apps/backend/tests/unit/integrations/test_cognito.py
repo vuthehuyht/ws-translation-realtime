@@ -61,7 +61,7 @@ async def test_cognito_sign_up_and_confirmation_flow() -> None:
         await cognito.authenticate(email=email, password=password)
 
     # 4. Confirm with wrong code fails
-    with pytest.raises(ValidationException, match="Invalid confirmation code"):
+    with pytest.raises(ValidationException, match="Invalid or expired confirmation code"):
         await cognito.confirm_sign_up(email=email, confirmation_code="000000")
 
     # 5. Confirm with valid code succeeds
@@ -113,7 +113,7 @@ async def test_aws_cognito_sign_up_success_and_error_mappings() -> None:
         await cognito.sign_up("host@example.com", "weak", "Host User")
 
     mock_boto.sign_up.side_effect = _make_client_error("InternalErrorException", "Boom")
-    with pytest.raises(BadGatewayException, match="Boom"):
+    with pytest.raises(BadGatewayException, match="Authentication provider error"):
         await cognito.sign_up("host@example.com", "ValidPassword123@", "Host User")
 
 
@@ -135,43 +135,18 @@ async def test_aws_cognito_get_user_info_and_confirm_errors() -> None:
     with pytest.raises(NotFoundException, match="not found"):
         await cognito.get_user_info("missing@example.com")
 
-    mock_boto.confirm_sign_up.side_effect = _make_client_error(
-        "CodeMismatchException", "Bad code"
-    )
-    mock_boto.admin_get_user.side_effect = None
-    mock_boto.admin_get_user.return_value = {"UserStatus": "UNCONFIRMED", "UserAttributes": []}
-    with pytest.raises(ValidationException, match="Bad code"):
-        await cognito.confirm_sign_up("host@example.com", "000000")
-
-    # Idempotent confirm when Cognito user is already CONFIRMED (CodeMismatchException)
-    mock_boto.confirm_sign_up.side_effect = _make_client_error(
-        "CodeMismatchException", "Invalid code provided, please request a code again."
-    )
-    mock_boto.admin_get_user.return_value = {
-        "UserStatus": "CONFIRMED",
-        "UserAttributes": [
-            {"Name": "sub", "Value": "sub-aws-456"},
-            {"Name": "name", "Value": "Nguyễn Văn A"},
-        ],
-    }
-    idempotent_res = await cognito.confirm_sign_up("host@example.com", "123456")
-    assert idempotent_res == {
-        "status": "CONFIRMED",
-        "sub": "sub-aws-456",
-        "name": "Nguyễn Văn A",
-    }
-
-    # Idempotent confirm when Cognito raises NotAuthorizedException for CONFIRMED user
-    mock_boto.confirm_sign_up.side_effect = _make_client_error(
-        "NotAuthorizedException", "User cannot be confirmed. Current status is CONFIRMED"
-    )
-    idempotent_not_auth = await cognito.confirm_sign_up("host@example.com", "123456")
-    assert idempotent_not_auth["status"] == "CONFIRMED"
-
-    # NotAuthorizedException when user is still UNCONFIRMED raises UnauthorizedException
-    mock_boto.admin_get_user.return_value = {"UserStatus": "UNCONFIRMED", "UserAttributes": []}
-    with pytest.raises(UnauthorizedException, match="cannot be confirmed"):
-        await cognito.confirm_sign_up("host@example.com", "123456")
+    count_before = mock_boto.admin_get_user.await_count
+    for err_code in (
+        "CodeMismatchException",
+        "ExpiredCodeException",
+        "NotAuthorizedException",
+        "UserNotFoundException",
+    ):
+        mock_boto.confirm_sign_up.side_effect = _make_client_error(err_code, "Sensitive detail")
+        with pytest.raises(ValidationException, match="Invalid or expired confirmation code"):
+            await cognito.confirm_sign_up("host@example.com", "000000")
+    # Never fall back to admin_get_user on confirm failures (prevents unauthenticated bypass).
+    assert mock_boto.admin_get_user.await_count == count_before
 
     mock_boto.initiate_auth.side_effect = _make_client_error(
         "NotAuthorizedException", "Wrong password"
@@ -298,6 +273,20 @@ def test_get_cognito_client_selection_by_env(monkeypatch: pytest.MonkeyPatch) ->
     )
     monkeypatch.setattr(cognito_module, "get_settings", lambda: test_settings)
     assert isinstance(cognito_module.get_cognito_client(), MockCognitoClient)
+
+    # 4. env="production" with placeholder Cognito IDs fails fast instead of using MockCognitoClient
+    monkeypatch.setattr(cognito_module, "_cognito_instance", None)
+    fake_prod_settings = Settings.model_construct(
+        env="production",
+        aws_region="ap-southeast-1",
+        aws_access_key_id=None,
+        aws_secret_access_key=None,
+        cognito_user_pool_id="ap-southeast-1_local",
+        cognito_client_id="local_client_id",
+    )
+    monkeypatch.setattr(cognito_module, "get_settings", lambda: fake_prod_settings)
+    with pytest.raises(RuntimeError, match="Live Cognito configuration is required"):
+        cognito_module.get_cognito_client()
 
 
 async def test_mock_cognito_refresh_tokens_lifecycle() -> None:

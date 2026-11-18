@@ -25,6 +25,9 @@ from app.services.wallet_service import WalletService
 
 _redis_client: aioredis.Redis | None = None
 
+REDIS_CONNECT_TIMEOUT_SECONDS = 2.0
+REDIS_SOCKET_TIMEOUT_SECONDS = 2.0
+
 
 async def get_redis() -> aioredis.Redis:
     """Yield or initialize singleton async Redis client."""
@@ -35,8 +38,19 @@ async def get_redis() -> aioredis.Redis:
             settings.redis.url,
             encoding="utf-8",
             decode_responses=True,
+            socket_connect_timeout=REDIS_CONNECT_TIMEOUT_SECONDS,
+            socket_timeout=REDIS_SOCKET_TIMEOUT_SECONDS,
+            retry_on_timeout=False,
         )
     return _redis_client
+
+
+async def close_redis_connection() -> None:
+    """Close singleton async Redis connection pool on application shutdown."""
+    global _redis_client
+    if _redis_client is not None:
+        await _redis_client.aclose()
+        _redis_client = None
 
 
 # Repository dependencies

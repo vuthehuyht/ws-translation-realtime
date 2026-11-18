@@ -27,18 +27,23 @@ resource "aws_elasticache_parameter_group" "redis7" {
   }
 }
 
-# ElastiCache Cluster (Single-AZ Node in ap-southeast-1a to achieve sub-millisecond latency and $0 cross-AZ fee)
-resource "aws_elasticache_cluster" "redis" {
-  cluster_id           = "${var.project_name}-${var.environment}-redis"
-  engine               = "redis"
-  engine_version       = "7.1"
-  node_type            = var.node_type
-  num_cache_nodes      = 1
-  parameter_group_name = aws_elasticache_parameter_group.redis7.name
-  port                 = 6379
-  subnet_group_name    = aws_elasticache_subnet_group.main.name
-  security_group_ids   = var.security_group_ids
-  availability_zone    = var.primary_az
+# ElastiCache Replication Group (Single-AZ 1-node Redis 7.1 with TLS in-transit & at-rest encryption)
+resource "aws_elasticache_replication_group" "redis" {
+  replication_group_id        = "${var.project_name}-${var.environment}-redis"
+  description                 = "Single-AZ Redis 7.1 cache with TLS transit encryption"
+  engine                      = "redis"
+  engine_version              = "7.1"
+  node_type                   = var.node_type
+  num_cache_clusters          = 1
+  automatic_failover_enabled  = false
+  parameter_group_name        = aws_elasticache_parameter_group.redis7.name
+  port                        = 6379
+  subnet_group_name           = aws_elasticache_subnet_group.main.name
+  security_group_ids          = var.security_group_ids
+  preferred_cache_cluster_azs = [var.primary_az]
+
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
 
   tags = {
     Name        = "${var.project_name}-${var.environment}-redis"

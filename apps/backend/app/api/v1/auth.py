@@ -10,7 +10,6 @@ from app.core.config import get_settings
 from app.core.exceptions import (
     ForbiddenException,
     UnauthorizedException,
-    ValidationException,
     build_app_error_response,
 )
 from app.schemas.requests import (
@@ -36,6 +35,12 @@ REMEMBER_COOKIE_NAME = "ws_remember_me"
 AUTH_COOKIE_PATH = "/api/v1/auth"
 
 
+def _set_no_store_headers(response: Response) -> None:
+    """Prevent shared proxies or browser caches from storing token-issuing responses."""
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
+
 def _set_refresh_cookies(
     response: Response,
     refresh_token: str,
@@ -43,7 +48,7 @@ def _set_refresh_cookies(
 ) -> None:
     """Persist refresh token in an HttpOnly cookie scoped to /api/v1/auth."""
     settings = get_settings()
-    secure = not settings.app.is_local
+    secure = settings.app.use_secure_cookies
     max_age = settings.security.refresh_token_expire_days * 86400 if remember_me else None
     response.set_cookie(
         key=REFRESH_COOKIE_NAME,
@@ -77,7 +82,7 @@ def _set_refresh_cookies(
 def _clear_refresh_cookies(response: Response) -> None:
     """Expire auth cookies on the response when a refresh token is rejected."""
     settings = get_settings()
-    secure = not settings.app.is_local
+    secure = settings.app.use_secure_cookies
     for cookie_name in (REFRESH_COOKIE_NAME, REMEMBER_COOKIE_NAME):
         response.delete_cookie(
             key=cookie_name,
@@ -143,6 +148,7 @@ async def login(
 ) -> LoginResponse:
     """Authenticate email and password against Cognito and set HttpOnly refresh cookie."""
     result = await auth_service.login(payload)
+    _set_no_store_headers(response)
     _set_refresh_cookies(
         response=response,
         refresh_token=result.refresh_token,
@@ -196,13 +202,15 @@ async def refresh(
 
     try:
         result = await auth_service.refresh_session(refresh_token)
-    except (UnauthorizedException, ForbiddenException, ValidationException) as exc:
+    except (UnauthorizedException, ForbiddenException) as exc:
         # Attach Set-Cookie deletions directly on the error JSONResponse because FastAPI
         # exception handlers create a new response object and discard prior Response mutations.
         error_response = build_app_error_response(exc)
+        _set_no_store_headers(error_response)
         _clear_refresh_cookies(error_response)
         return error_response
 
+    _set_no_store_headers(response)
     if result.refresh_token:
         remember_me = request.cookies.get(REMEMBER_COOKIE_NAME) == "1"
         _set_refresh_cookies(

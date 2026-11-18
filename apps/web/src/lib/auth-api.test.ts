@@ -46,14 +46,11 @@ describe("auth-api", () => {
     );
   });
 
-  it("calls POST /api/v1/auth/confirm and returns walletBalance", async () => {
+  it("calls POST /api/v1/auth/confirm and returns status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           status: "CONFIRMED",
-          userSub: "sub-123",
-          walletBalance: "2.0000",
-          currency: "USD",
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
       )
@@ -65,7 +62,6 @@ describe("auth-api", () => {
     });
 
     expect(res.status).toBe("CONFIRMED");
-    expect(res.walletBalance).toBe("2.0000");
   });
 
   it("throws ApiError with RFC 7807 fields on 429 resend-otp", async () => {

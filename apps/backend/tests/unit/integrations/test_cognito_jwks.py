@@ -253,3 +253,18 @@ async def test_aws_client_and_auth_dependencies_use_the_jwks_verifier(
     with pytest.raises(UnauthorizedException, match="expired"):
         await get_access_token_context(redis, f"Bearer {expired}")
     assert (await get_logout_token_context(redis, f"Bearer {expired}")).subject == "user-sub-1"
+
+
+async def test_cache_hit_skips_lock_for_concurrent_verifications() -> None:
+    key = _Key("kid-1")
+    jwks = _Jwks(key)
+    verifier = _verifier(jwks)
+    token = key.sign()
+
+    # Prime cache
+    assert (await verifier.verify_access_token(token))["sub"] == "user-sub-1"
+
+    # Even while the refresh lock is held (e.g. a background miss/refresh), cache hits do not block
+    async with verifier._lock:
+        claims = await verifier.verify_access_token(token)
+        assert claims["sub"] == "user-sub-1"

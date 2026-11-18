@@ -104,15 +104,22 @@ module "s3_cloudfront" {
   environment  = var.environment
 }
 
-# 8. Amazon Cognito User Pool for Host Auth
+# 10. Amazon Cognito User Pool for Host Auth (after ALB/domain locals below)
+locals {
+  default_app_origin     = var.app_domain != "" ? "https://${var.app_domain}" : "https://${module.alb.alb_dns_name}"
+  effective_cors_origins = length(var.cors_origins) > 0 ? var.cors_origins : [local.default_app_origin]
+}
+
 module "cognito" {
   source = "../../modules/cognito"
 
-  project_name = var.project_name
-  environment  = var.environment
+  project_name  = var.project_name
+  environment   = var.environment
+  callback_urls = ["${local.default_app_origin}/api/auth/callback"]
+  logout_urls   = ["${local.default_app_origin}/login"]
 }
 
-# 9. AWS AppSync Events WebSocket API for Subtitle Fan-out
+# 11. AWS AppSync Events WebSocket API for Subtitle Fan-out
 module "appsync" {
   source = "../../modules/appsync"
 
@@ -120,7 +127,33 @@ module "appsync" {
   environment  = var.environment
 }
 
-# 10. IAM Execution & Backend Task Roles
+# 12. Runtime Secrets stored in Secrets Manager (encrypted with Prod KMS CMK)
+resource "random_password" "jwt_secret" {
+  length  = 48
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "database_url" {
+  name       = "${var.project_name}-${var.environment}-database-url"
+  kms_key_id = aws_kms_key.prod.arn
+}
+
+resource "aws_secretsmanager_secret_version" "database_url" {
+  secret_id     = aws_secretsmanager_secret.database_url.id
+  secret_string = module.rds.database_url
+}
+
+resource "aws_secretsmanager_secret" "jwt_secret_key" {
+  name       = "${var.project_name}-${var.environment}-jwt-secret-key"
+  kms_key_id = aws_kms_key.prod.arn
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_secret_key" {
+  secret_id     = aws_secretsmanager_secret.jwt_secret_key.id
+  secret_string = random_password.jwt_secret.result
+}
+
+# 13. IAM Execution & Backend Task Roles
 module "iam" {
   source = "../../modules/iam"
 
@@ -128,20 +161,26 @@ module "iam" {
   environment     = var.environment
   s3_bucket_arn   = module.s3_cloudfront.bucket_arn
   appsync_api_arn = module.appsync.api_arn
+  secret_arns = [
+    aws_secretsmanager_secret.database_url.arn,
+    aws_secretsmanager_secret.jwt_secret_key.arn,
+  ]
+  kms_key_arn = aws_kms_key.prod.arn
 }
 
-# 11. Application Load Balancer
+# 14. Application Load Balancer
 module "alb" {
   source = "../../modules/alb"
 
-  project_name      = var.project_name
-  environment       = var.environment
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
-  security_group_id = module.security.alb_sg_id
+  project_name        = var.project_name
+  environment         = var.environment
+  vpc_id              = module.vpc.vpc_id
+  public_subnet_ids   = module.vpc.public_subnet_ids
+  security_group_id   = module.security.alb_sg_id
+  acm_certificate_arn = var.acm_certificate_arn
 }
 
-# 12. AWS WAFv2 WebACL Protection for Production ALB
+# 15. AWS WAFv2 WebACL Protection for Production ALB
 module "waf" {
   source = "../../modules/waf"
 
@@ -151,29 +190,34 @@ module "waf" {
   rate_limit_per_5min = 2000
 }
 
-# 13. Production ECS Fargate Cluster & Services
+# 16. Production ECS Fargate Cluster & Services
 module "ecs" {
   source = "../../modules/ecs"
 
-  project_name             = var.project_name
-  environment              = var.environment
-  aws_region               = var.aws_region
-  private_subnet_ids       = module.vpc.private_compute_subnet_ids
-  ecs_web_sg_id            = module.security.ecs_web_sg_id
-  ecs_backend_sg_id        = module.security.ecs_backend_sg_id
-  web_target_group_arn     = module.alb.web_target_group_arn
-  backend_target_group_arn = module.alb.backend_target_group_arn
-  execution_role_arn       = module.iam.execution_role_arn
-  web_task_role_arn        = module.iam.web_task_role_arn
-  backend_task_role_arn    = module.iam.backend_task_role_arn
-  web_image                = "${module.ecr.web_repository_url}:latest"
-  backend_image            = "${module.ecr.backend_repository_url}:latest"
-  database_url             = module.rds.database_url
-  redis_url                = "${module.elasticache.redis_url}/0"
-  s3_bucket_name           = module.s3_cloudfront.bucket_name
-  appsync_graphql_url      = module.appsync.graphql_url
-  web_desired_count        = var.web_desired_count
-  backend_desired_count    = var.backend_desired_count
+  project_name              = var.project_name
+  environment               = var.environment
+  aws_region                = var.aws_region
+  private_subnet_ids        = module.vpc.private_compute_subnet_ids
+  ecs_web_sg_id             = module.security.ecs_web_sg_id
+  ecs_backend_sg_id         = module.security.ecs_backend_sg_id
+  web_target_group_arn      = module.alb.web_target_group_arn
+  backend_target_group_arn  = module.alb.backend_target_group_arn
+  execution_role_arn        = module.iam.execution_role_arn
+  web_task_role_arn         = module.iam.web_task_role_arn
+  backend_task_role_arn     = module.iam.backend_task_role_arn
+  web_image                 = "${module.ecr.web_repository_url}:${var.web_image_tag}"
+  backend_image             = "${module.ecr.backend_repository_url}:${var.backend_image_tag}"
+  redis_url                 = "${module.elasticache.redis_url}/0"
+  s3_bucket_name            = module.s3_cloudfront.bucket_name
+  appsync_graphql_url       = module.appsync.graphql_url
+  cognito_user_pool_id      = module.cognito.user_pool_id
+  cognito_client_id         = module.cognito.user_pool_client_id
+  cors_origins              = local.effective_cors_origins
+  cookie_secure             = true
+  database_url_secret_arn   = aws_secretsmanager_secret.database_url.arn
+  jwt_secret_key_secret_arn = aws_secretsmanager_secret.jwt_secret_key.arn
+  web_desired_count         = var.web_desired_count
+  backend_desired_count     = var.backend_desired_count
 }
 
 # 14. ECS Backend Auto-scaling Target & CPU Tracking Policy

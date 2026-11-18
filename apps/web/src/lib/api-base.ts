@@ -27,8 +27,14 @@ export class ApiError extends Error {
 }
 
 export function getApiBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000").replace(
-    /\/+$/,
-    ""
-  );
+  const configured = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (configured) {
+    return configured.replace(/\/+$/, "");
+  }
+  // In production behind ALB path routing (/api/* -> backend), use same-origin relative URLs
+  // instead of hardcoding localhost:8000 at Docker build time.
+  if (process.env.NODE_ENV === "production") {
+    return "";
+  }
+  return "http://localhost:8000";
 }

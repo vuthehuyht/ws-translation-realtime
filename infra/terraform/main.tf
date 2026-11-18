@@ -117,9 +117,28 @@ module "iam" {
   dynamodb_table_arns = module.dynamodb.all_table_arns
   s3_bucket_arn       = module.s3_cloudfront.bucket_arn
   appsync_api_arn     = module.appsync.api_arn
+  secret_arns         = [aws_secretsmanager_secret.jwt_secret_key.arn]
 }
 
 # 11. Amazon ECS Fargate Cluster & Services
+locals {
+  default_origin = "https://${module.alb.alb_dns_name}"
+}
+
+resource "random_password" "jwt_secret" {
+  length  = 48
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "jwt_secret_key" {
+  name = "${var.project_name}-${var.environment}-jwt-secret-key"
+}
+
+resource "aws_secretsmanager_secret_version" "jwt_secret_key" {
+  secret_id     = aws_secretsmanager_secret.jwt_secret_key.id
+  secret_string = random_password.jwt_secret.result
+}
+
 module "ecs" {
   source = "./modules/ecs"
 
@@ -135,20 +154,18 @@ module "ecs" {
   web_task_role_arn        = module.iam.web_task_role_arn
   backend_task_role_arn    = module.iam.backend_task_role_arn
 
-  web_image     = var.web_image != "" ? var.web_image : "${module.ecr.web_repository_url}:latest"
-  backend_image = var.backend_image != "" ? var.backend_image : "${module.ecr.backend_repository_url}:latest"
+  web_image     = var.web_image != "" ? var.web_image : "${module.ecr.web_repository_url}:v0.1.0"
+  backend_image = var.backend_image != "" ? var.backend_image : "${module.ecr.backend_repository_url}:v0.1.0"
 
   web_desired_count     = var.web_desired_count
   backend_desired_count = var.backend_desired_count
 
-  redis_url           = module.elasticache.redis_url
-  s3_bucket_name      = module.s3_cloudfront.bucket_name
-  appsync_graphql_url = module.appsync.graphql_url
-
-  users_table_name                = module.dynamodb.users_table_name
-  wallets_table_name              = module.dynamodb.wallets_table_name
-  payment_transactions_table_name = module.dynamodb.payment_transactions_table_name
-  rooms_table_name                = module.dynamodb.rooms_table_name
-  room_transcripts_table_name     = module.dynamodb.room_transcripts_table_name
-  usage_ledger_table_name         = module.dynamodb.usage_ledger_table_name
+  redis_url                 = "${module.elasticache.redis_url}/0"
+  s3_bucket_name            = module.s3_cloudfront.bucket_name
+  appsync_graphql_url       = module.appsync.graphql_url
+  cognito_user_pool_id      = module.cognito.user_pool_id
+  cognito_client_id         = module.cognito.user_pool_client_id
+  cors_origins              = [local.default_origin]
+  cookie_secure             = false
+  jwt_secret_key_secret_arn = aws_secretsmanager_secret.jwt_secret_key.arn
 }

@@ -1,15 +1,17 @@
 """Unit tests for AuthService (app.services.auth_service)."""
 
 from decimal import Decimal
+from unittest.mock import AsyncMock
 
 import fakeredis.aioredis
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
-    ConflictException,
+    BadGatewayException,
     ForbiddenException,
-    NotFoundException,
+    ServiceUnavailableException,
     TooManyRequestsException,
     UnauthorizedException,
 )
@@ -43,15 +45,16 @@ async def test_auth_service_registration_and_confirmation_lifecycle(
     reg_res = await service.register(reg_req)
     assert reg_res.email == "host.new@example.com"
     assert reg_res.status == "CONFIRMATION_REQUIRED"
-    assert len(reg_res.user_sub) > 10
+    assert reg_res.user_sub is None
 
     # Under TASK-AUTH-01, PostgreSQL is NOT yet populated until OTP confirmation
-    user_before_confirm = await user_repo.get_by_id(reg_res.user_sub)
+    user_before_confirm = await user_repo.get_by_email("host.new@example.com")
     assert user_before_confirm is None
 
-    # 2. Duplicate registration in Cognito raises ConflictException (HTTP 409)
-    with pytest.raises(ConflictException, match="already exists"):
-        await service.register(reg_req)
+    # 2. Duplicate registration returns the same non-committal status without leaking existence
+    dup_res = await service.register(reg_req)
+    assert dup_res.status == "CONFIRMATION_REQUIRED"
+    assert dup_res.user_sub is None
 
     # 3. Confirm sign up with OTP (TASK-AUTH-02)
     confirm_req = ConfirmRequest(
@@ -60,28 +63,30 @@ async def test_auth_service_registration_and_confirmation_lifecycle(
     )
     confirm_res = await service.confirm_sign_up(confirm_req)
     assert confirm_res.status == "CONFIRMED"
-    assert confirm_res.wallet_balance == Decimal("2.0000")
+    assert confirm_res.model_dump() == {"status": "CONFIRMED"}
 
     # User in DB should now be ACTIVE, Wallet initialized ($2.00 Welcome Bonus), and Ledger recorded
-    user = await user_repo.get_by_id(reg_res.user_sub)
+    user = await user_repo.get_by_email("host.new@example.com")
     assert user is not None
     assert user.status == "ACTIVE"
 
-    wallet = await wallet_repo.get_by_host_id(reg_res.user_sub)
+    wallet = await wallet_repo.get_by_host_id(user.id)
     assert wallet is not None
     assert wallet.balance == Decimal("2.0000")
 
-    welcome_tx = await wallet_repo.get_transaction_by_provider_id(f"welcome_{reg_res.user_sub}")
+    welcome_tx = await wallet_repo.get_transaction_by_provider_id(f"welcome_{user.id}")
     assert welcome_tx is not None
     assert welcome_tx.type == "PROMO_CREDIT"
     assert welcome_tx.provider == "SYSTEM"
     assert welcome_tx.amount == Decimal("2.0000")
     assert welcome_tx.status == "SUCCEEDED"
 
-    # Idempotent second confirmation must not fail or double-credit Welcome Bonus
+    # Idempotent confirmation with valid code succeeds without double-crediting Welcome Bonus
     second_confirm = await service.confirm_sign_up(confirm_req)
     assert second_confirm.status == "CONFIRMED"
-    assert second_confirm.wallet_balance == Decimal("2.0000")
+    wallet_after = await wallet_repo.get_by_host_id(user.id)
+    assert wallet_after is not None
+    assert wallet_after.balance == Decimal("2.0000")
 
     # 4. Login after confirmation
     login_req = LoginRequest(
@@ -144,10 +149,10 @@ async def test_auth_service_resend_otp_and_rate_limit(db_session: AsyncSession) 
         redis_client=fake_redis,
     )
 
-    # 1. Unknown email raises NotFoundException and does NOT lock out rate limit
-    with pytest.raises(NotFoundException, match="not found"):
-        await service.resend_otp(ResendOtpRequest(email="unknown@example.com"))
-    assert await fake_redis.get("email:unknown@example.com:resend_limit") is None
+    # 1. Unknown email returns uniform OTP_SENT to block email enumeration
+    unknown_res = await service.resend_otp(ResendOtpRequest(email="unknown@example.com"))
+    assert unknown_res.status == "OTP_SENT"
+    assert unknown_res.retry_after == 60
 
     # 2. Register user, resend succeeds and sets 60s Redis cooldown
     await service.register(
@@ -165,15 +170,52 @@ async def test_auth_service_resend_otp_and_rate_limit(db_session: AsyncSession) 
     with pytest.raises(TooManyRequestsException, match="wait"):
         await service.resend_otp(ResendOtpRequest(email="resend.test@example.com"))
 
-    # 4. Confirmed user calling resend_otp raises ConflictException (409)
+    # 4. Confirmed user calling resend_otp also receives uniform OTP_SENT
     await fake_redis.delete("email:resend.test@example.com:resend_limit")
     await service.confirm_sign_up(
         ConfirmRequest(email="resend.test@example.com", otpCode="123456")
     )
-    with pytest.raises(ConflictException, match="already confirmed"):
-        await service.resend_otp(ResendOtpRequest(email="resend.test@example.com"))
+    confirmed_res = await service.resend_otp(ResendOtpRequest(email="resend.test@example.com"))
+    assert confirmed_res.status == "OTP_SENT"
 
     await fake_redis.aclose()
+
+
+async def test_auth_service_resend_otp_redis_outage_and_cognito_error_preservation(
+    db_session: AsyncSession,
+) -> None:
+    user_repo = UserRepository(session=db_session)
+    wallet_repo = WalletRepository(session=db_session)
+    mock_cognito = MockCognitoClient()
+
+    failing_redis = AsyncMock()
+    failing_redis.set.side_effect = RedisConnectionError("Redis down")
+    service = AuthService(
+        user_repo=user_repo,
+        wallet_repo=wallet_repo,
+        cognito_client=mock_cognito,
+        redis_client=failing_redis,
+    )
+
+    with pytest.raises(ServiceUnavailableException, match="Rate limit store"):
+        await service.resend_otp(ResendOtpRequest(email="anyone@example.com"))
+
+    # When Cognito fails AND Redis cleanup also fails, the Cognito exception must surface.
+    cleanup_failing_redis = AsyncMock()
+    cleanup_failing_redis.set.return_value = True
+    cleanup_failing_redis.delete.side_effect = RedisConnectionError("Redis delete failed")
+    mock_cognito.resend_confirmation_code = AsyncMock(  # type: ignore[method-assign]
+        side_effect=BadGatewayException("Authentication provider error")
+    )
+    service_2 = AuthService(
+        user_repo=user_repo,
+        wallet_repo=wallet_repo,
+        cognito_client=mock_cognito,
+        redis_client=cleanup_failing_redis,
+    )
+
+    with pytest.raises(BadGatewayException, match="Authentication provider error"):
+        await service_2.resend_otp(ResendOtpRequest(email="anyone@example.com"))
 
 
 async def test_auth_service_suspended_user_login_fails(db_session: AsyncSession) -> None:
@@ -187,7 +229,7 @@ async def test_auth_service_suspended_user_login_fails(db_session: AsyncSession)
         cognito_client=mock_cognito,
     )
 
-    reg_res = await service.register(
+    await service.register(
         RegisterRequest(
             email="suspended@example.com",
             password="ValidPassword123@",
@@ -198,7 +240,7 @@ async def test_auth_service_suspended_user_login_fails(db_session: AsyncSession)
         ConfirmRequest(email="suspended@example.com", otpCode="123456")
     )
 
-    user = await user_repo.get_by_id(reg_res.user_sub)
+    user = await user_repo.get_by_email("suspended@example.com")
     assert user is not None
     user.status = "SUSPENDED"
     await user_repo.update(user)
@@ -235,7 +277,7 @@ async def test_auth_service_login_fails_when_user_missing_in_db(
         confirmation_code="123456",
     )
 
-    with pytest.raises(UnauthorizedException, match="not found in database"):
+    with pytest.raises(UnauthorizedException, match="Incorrect username or password"):
         await service.login(
             LoginRequest(
                 email="orphan@example.com",
@@ -252,7 +294,7 @@ async def test_auth_service_refresh_session_success_and_guards(
     mock_cognito = MockCognitoClient()
     service = AuthService(user_repo=user_repo, wallet_repo=wallet_repo, cognito_client=mock_cognito)
 
-    reg_res = await service.register(
+    await service.register(
         RegisterRequest(
             email="refresh.svc@example.com",
             password="ValidPassword123@",
@@ -265,6 +307,8 @@ async def test_auth_service_refresh_session_success_and_guards(
     login_res = await service.login(
         LoginRequest(email="refresh.svc@example.com", password="ValidPassword123@")
     )
+    db_user = await user_repo.get_by_email("refresh.svc@example.com")
+    assert db_user is not None
 
     # 1. Valid refresh returns new access/id tokens and user profile
     refreshed = await service.refresh_session(login_res.refresh_token)
@@ -272,7 +316,7 @@ async def test_auth_service_refresh_session_success_and_guards(
     assert refreshed.response.tokens.id_token
     assert refreshed.refresh_token is None
     assert refreshed.response.tokens.expires_in == 3600
-    assert refreshed.response.user.id == reg_res.user_sub
+    assert refreshed.response.user.id == db_user.id
     assert refreshed.response.user.email == "refresh.svc@example.com"
 
     # 2. Blank refresh token raises UnauthorizedException
@@ -280,8 +324,6 @@ async def test_auth_service_refresh_session_success_and_guards(
         await service.refresh_session("   ")
 
     # 3. Suspended user cannot refresh session
-    db_user = await user_repo.get_by_id(reg_res.user_sub)
-    assert db_user is not None
     db_user.status = "SUSPENDED"
     await user_repo.update(db_user)
 

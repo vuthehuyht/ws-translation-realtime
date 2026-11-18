@@ -25,6 +25,38 @@ resource "aws_iam_role_policy_attachment" "ecs_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "ecs_execution_secrets" {
+  count = length(var.secret_arns) > 0 ? 1 : 0
+  name  = "${var.project_name}-${var.environment}-ecs-execution-secrets"
+  role  = aws_iam_role.ecs_execution_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = concat(
+      [
+        {
+          Sid    = "AllowReadRuntimeSecrets"
+          Effect = "Allow"
+          Action = [
+            "secretsmanager:GetSecretValue"
+          ]
+          Resource = var.secret_arns
+        }
+      ],
+      var.kms_key_arn != "" ? [
+        {
+          Sid    = "AllowDecryptSecretsKms"
+          Effect = "Allow"
+          Action = [
+            "kms:Decrypt"
+          ]
+          Resource = [var.kms_key_arn]
+        }
+      ] : []
+    )
+  })
+}
+
 # 2. ECS Web Task Role (Minimal frontend runtime permissions)
 resource "aws_iam_role" "ecs_web_task_role" {
   name               = "${var.project_name}-${var.environment}-ecs-web-task-role"
