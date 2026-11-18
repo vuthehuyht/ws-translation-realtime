@@ -22,13 +22,13 @@ async def test_auth_api_full_registration_and_login_flow(async_client: AsyncClie
     reg_data = reg_resp.json()
     assert reg_data["email"] == "api.test@example.com"
     assert reg_data["status"] == "CONFIRMATION_REQUIRED"
-    assert "userSub" in reg_data
-    assert len(reg_data["userSub"]) > 10
+    assert reg_data.get("userSub") is None
 
-    # 2. Duplicate registration returns 409 Conflict
+    # 2. Duplicate registration returns the same 201 response to prevent email enumeration
     dup_resp = await async_client.post("/api/v1/auth/register", json=reg_payload)
-    assert dup_resp.status_code == 409
-    assert dup_resp.json()["error"]["code"] == "RESOURCE_CONFLICT"
+    assert dup_resp.status_code == 201
+    assert dup_resp.json()["status"] == "CONFIRMATION_REQUIRED"
+    assert dup_resp.json().get("userSub") is None
 
     # 2b. Resend OTP succeeds (200) and immediate retry is rate-limited (429)
     resend_resp = await async_client.post(
@@ -54,13 +54,19 @@ async def test_auth_api_full_registration_and_login_flow(async_client: AsyncClie
     confirm_resp = await async_client.post("/api/v1/auth/confirm", json=confirm_payload)
     assert confirm_resp.status_code == 200
     confirm_data = confirm_resp.json()
-    assert confirm_data["status"] == "CONFIRMED"
-    assert confirm_data["walletBalance"] == "2.0000"
+    assert confirm_data == {"status": "CONFIRMED"}
 
-    # Idempotent second confirmation returns 200 without duplicate key error
+    # Confirm with wrong OTP fails even after user is already confirmed
+    wrong_after_confirm = await async_client.post(
+        "/api/v1/auth/confirm",
+        json={"email": "api.test@example.com", "otpCode": "000000"},
+    )
+    assert wrong_after_confirm.status_code == 422
+
+    # Idempotent second confirmation with valid code returns 200 without exposing balance/sub
     confirm_resp_2 = await async_client.post("/api/v1/auth/confirm", json=confirm_payload)
     assert confirm_resp_2.status_code == 200
-    assert confirm_resp_2.json()["walletBalance"] == "2.0000"
+    assert confirm_resp_2.json() == {"status": "CONFIRMED"}
 
     # 4. Login after confirmation
     login_payload = {
@@ -69,6 +75,8 @@ async def test_auth_api_full_registration_and_login_flow(async_client: AsyncClie
     }
     login_resp = await async_client.post("/api/v1/auth/login", json=login_payload)
     assert login_resp.status_code == 200
+    assert login_resp.headers.get("cache-control") == "no-store"
+    assert login_resp.headers.get("pragma") == "no-cache"
     login_data = login_resp.json()
     assert "tokens" in login_data
     assert "accessToken" in login_data["tokens"]
@@ -125,12 +133,12 @@ async def test_auth_api_validation_errors(async_client: AsyncClient) -> None:
     )
     assert no_upper_resp.status_code == 422
 
-    # Confirm with unknown email -> 404
+    # Confirm with unknown email -> uniform 422 (prevents email enumeration)
     unknown_confirm_resp = await async_client.post(
         "/api/v1/auth/confirm",
         json={"email": "nobody@example.com", "otpCode": "123456"},
     )
-    assert unknown_confirm_resp.status_code == 404
+    assert unknown_confirm_resp.status_code == 422
 
     # Register a user then confirm with wrong OTP -> 422
     await async_client.post(
@@ -147,12 +155,20 @@ async def test_auth_api_validation_errors(async_client: AsyncClient) -> None:
     )
     assert wrong_otp_resp.status_code == 422
 
-    # Resend OTP for unknown email -> 404
+    # Resend OTP for unknown email -> uniform 200 OTP_SENT (prevents email enumeration)
     unknown_resend_resp = await async_client.post(
         "/api/v1/auth/resend-otp",
         json={"email": "nobody@example.com"},
     )
-    assert unknown_resend_resp.status_code == 404
+    assert unknown_resend_resp.status_code == 200
+    assert unknown_resend_resp.json()["status"] == "OTP_SENT"
+
+    # Password over max_length (128) -> 422
+    too_long_pwd_resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": "nobody@example.com", "password": "A" * 129},
+    )
+    assert too_long_pwd_resp.status_code == 422
 
     # Empty password on login -> 422
     empty_pwd_login_resp = await async_client.post(
@@ -249,6 +265,8 @@ async def test_auth_api_refresh_token_cookie_only(
     # 2. Refresh via HttpOnly cookie with empty body succeeds
     cookie_refresh_resp = await async_client.post("/api/v1/auth/refresh")
     assert cookie_refresh_resp.status_code == 200
+    assert cookie_refresh_resp.headers.get("cache-control") == "no-store"
+    assert cookie_refresh_resp.headers.get("pragma") == "no-cache"
     refreshed_data = cookie_refresh_resp.json()
     assert refreshed_data["tokens"]["accessToken"]
     assert refreshed_data["tokens"]["idToken"]
@@ -365,6 +383,7 @@ async def test_auth_api_refresh_rejects_token_without_subject_and_clears_cookies
     resp = await async_client.post("/api/v1/auth/refresh")
 
     assert resp.status_code == 401
+    assert resp.headers.get("cache-control") == "no-store"
     assert any(
         h.startswith('ws_refresh_token=""') and "Max-Age=0" in h
         for h in resp.headers.get_list("set-cookie")

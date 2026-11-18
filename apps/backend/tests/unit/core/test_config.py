@@ -3,6 +3,9 @@
 import os
 from unittest import mock
 
+import pytest
+from pydantic import ValidationError
+
 from app.core.config import Settings, get_settings
 
 
@@ -56,11 +59,61 @@ def test_custom_environment_variable_override() -> None:
             "APP_NAME": "custom-translation-api",
             "DATABASE_URL": "postgresql+asyncpg://user:pass@db:5432/testdb",
             "REDIS_URL": "redis://cache:6379/1",
+            "COGNITO_USER_POOL_ID": "ap-southeast-1_LivePool123",
+            "COGNITO_CLIENT_ID": "liveclientid123",
+            "JWT_SECRET_KEY": "explicit-staging-jwt-secret-key-at-least-32-chars",
         },
     ):
         custom_settings = Settings()
         assert custom_settings.env == "staging"
         assert custom_settings.app.is_local is False
+        assert custom_settings.app.use_secure_cookies is True
         assert custom_settings.app_name == "custom-translation-api"
         assert custom_settings.database_url == "postgresql+asyncpg://user:pass@db:5432/testdb"
         assert custom_settings.redis.url == "redis://cache:6379/1"
+
+
+def test_non_local_settings_reject_insecure_defaults() -> None:
+    valid_base = {
+        "ENV": "production",
+        "COGNITO_USER_POOL_ID": "ap-southeast-1_LivePool123",
+        "COGNITO_CLIENT_ID": "liveclientid123",
+        "JWT_SECRET_KEY": "explicit-prod-jwt-secret-key-at-least-32-chars!!",
+        "CORS_ORIGINS": '["https://app.example.com"]',
+    }
+
+    with mock.patch.dict(os.environ, {**valid_base, "JWT_SECRET_KEY": "short"}, clear=False):
+        with pytest.raises(ValidationError, match="jwt_secret_key"):
+            Settings()
+
+    with mock.patch.dict(
+        os.environ,
+        {**valid_base, "COGNITO_USER_POOL_ID": "ap-southeast-1_local"},
+        clear=False,
+    ):
+        with pytest.raises(ValidationError, match="cognito_user_pool_id"):
+            Settings()
+
+    with mock.patch.dict(
+        os.environ,
+        {**valid_base, "COGNITO_CLIENT_ID": "local_client_id"},
+        clear=False,
+    ):
+        with pytest.raises(ValidationError, match="cognito_client_id"):
+            Settings()
+
+    with mock.patch.dict(
+        os.environ,
+        {**valid_base, "CORS_ORIGINS": '["*"]'},
+        clear=False,
+    ):
+        with pytest.raises(ValidationError, match="cors_origins"):
+            Settings()
+
+    with mock.patch.dict(
+        os.environ,
+        {**valid_base, "COOKIE_SECURE": "false"},
+        clear=False,
+    ):
+        with pytest.raises(ValidationError, match="cookie_secure"):
+            Settings()

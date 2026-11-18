@@ -106,3 +106,47 @@ async def test_wallet_service_promo_redemption(db_session: AsyncSession) -> None
     # Non-existent promo raises NotFoundException
     with pytest.raises(NotFoundException, match="invalid or expired"):
         await service.redeem_promo(host_id=host_id, code="INVALID_CODE")
+
+
+async def test_wallet_service_promo_duplicate_user_and_expiry_guards(
+    db_session: AsyncSession,
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    wallet_repo = WalletRepository(session=db_session)
+    service = WalletService(wallet_repo=wallet_repo)
+    host_id = "test-host-wallet-srv-3"
+
+    user = User(id=host_id, email="srv_promo_dup@example.com")
+    wallet = Wallet(host_id=host_id, balance=Decimal("0.0000"))
+    multi_promo = PromoCode(
+        code="MULTI5",
+        credit_amount=Decimal("5.0000"),
+        max_redemptions=5,
+        redemptions_count=0,
+        is_active=True,
+    )
+    expired_promo = PromoCode(
+        code="OLD5",
+        credit_amount=Decimal("5.0000"),
+        max_redemptions=5,
+        redemptions_count=0,
+        expires_at=datetime.now(UTC) - timedelta(minutes=5),
+        is_active=True,
+    )
+    db_session.add_all([user, wallet, multi_promo, expired_promo])
+    await db_session.flush()
+
+    assert await service.redeem_promo(host_id=host_id, code="MULTI5") == Decimal("5.0000")
+
+    # Same user redeeming MULTI5 again fails with ConflictException and rolls back counter
+    with pytest.raises(ConflictException, match="already been redeemed"):
+        await service.redeem_promo(host_id=host_id, code="MULTI5")
+
+    refreshed_promo = await wallet_repo.get_promo_code_by_code("MULTI5")
+    assert refreshed_promo is not None
+    assert refreshed_promo.redemptions_count == 1
+
+    # Expired promo raises NotFoundException
+    with pytest.raises(NotFoundException, match="invalid or expired"):
+        await service.redeem_promo(host_id=host_id, code="OLD5")

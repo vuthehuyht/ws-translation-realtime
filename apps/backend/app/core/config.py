@@ -40,11 +40,19 @@ class AppConfig(BaseModel):
     project_name: str = "ws-translation"
     log_level: str = "INFO"
     cors_origins: list[str] = ["http://localhost:3000"]
+    cookie_secure: bool | None = None
 
     @property
     def is_local(self) -> bool:
         """Check whether runtime is purely local or test."""
         return self.env in ("local", "test")
+
+    @property
+    def use_secure_cookies(self) -> bool:
+        """Whether auth cookies must carry the Secure attribute."""
+        if self.cookie_secure is not None:
+            return self.cookie_secure
+        return not self.is_local
 
 
 class DatabaseConfig(BaseModel):
@@ -152,12 +160,39 @@ class Settings(BaseSettings):
     # Security
     jwt_secret_key: str = "default-insecure-dev-jwt-secret-key-32chars-min!"  # noqa: S105
     jwt_algorithm: str = "HS256"
+    cookie_secure: bool | None = None
 
     @model_validator(mode="after")
-    def _reject_wildcard_cors_outside_local(self) -> "Settings":
-        """Fail fast: CORS runs with credentials (HttpOnly refresh cookie), so '*' is unsafe."""
-        if self.env not in ("local", "test") and "*" in self.cors_origins:
+    def _validate_non_local_security_settings(self) -> "Settings":
+        """Fail fast outside local/test if insecure defaults or wildcard CORS are configured."""
+        if self.env in ("local", "test"):
+            return self
+
+        if "*" in self.cors_origins:
             raise ValueError("cors_origins must list explicit origins outside local/test")
+
+        insecure_jwt_secrets = {
+            "",
+            "default-insecure-dev-jwt-secret-key-32chars-min!",
+            "change-me-in-production",
+        }
+        secret = self.jwt_secret_key.strip()
+        if secret in insecure_jwt_secrets or len(secret) < 32:
+            raise ValueError(
+                "jwt_secret_key must be an explicit >=32-char secret outside local/test"
+            )
+
+        pool_id = self.cognito_user_pool_id.strip()
+        if not pool_id or pool_id.endswith("_local") or pool_id.startswith("dummy"):
+            raise ValueError("cognito_user_pool_id must be a live pool ID outside local/test")
+
+        client_id = self.cognito_client_id.strip()
+        if not client_id or client_id.startswith("local_") or client_id.startswith("dummy"):
+            raise ValueError("cognito_client_id must be a live client ID outside local/test")
+
+        if self.env == "production" and self.cookie_secure is False:
+            raise ValueError("cookie_secure cannot be False in production")
+
         return self
 
     # Domain models
@@ -169,6 +204,7 @@ class Settings(BaseSettings):
             project_name=self.project_name,
             log_level=self.log_level,
             cors_origins=self.cors_origins,
+            cookie_secure=self.cookie_secure,
         )
 
     @property

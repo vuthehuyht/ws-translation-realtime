@@ -93,6 +93,14 @@ class CognitoJwtVerifier:
         return dict(claims)
 
     async def _get_jwk(self, kid: str) -> dict[str, Any]:
+        # Unlocked fast path: _refresh_keys replaces self._keys atomically before updating
+        # _fetched_at, so concurrent cache-hit readers do not serialize behind the lock.
+        now = self._clock()
+        keys = self._keys
+        fetched_at = self._fetched_at
+        if fetched_at is not None and now - fetched_at < self._cache_ttl and kid in keys:
+            return keys[kid]
+
         async with self._lock:
             now = self._clock()
             cache_fresh = self._fetched_at is not None and now - self._fetched_at < self._cache_ttl

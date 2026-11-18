@@ -11,6 +11,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.deps import close_redis_connection
 from app.api.v1.auth import router as auth_router
 from app.api.v1.health import router as health_router
 from app.core.config import get_settings
@@ -26,7 +27,8 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
     logger.info("Starting up %s in '%s' environment", settings.app_name, settings.env)
     yield
-    logger.info("Shutting down %s, disposing database connection pools...", settings.app_name)
+    logger.info("Shutting down %s, disposing database and Redis pools...", settings.app_name)
+    await close_redis_connection()
     await close_db_connections()
 
 

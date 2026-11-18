@@ -4,9 +4,10 @@ Provides data access methods for Wallet balance, Transactions, and Promo Codes.
 """
 
 from collections.abc import Sequence
+from datetime import datetime
 from decimal import Decimal
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundException, PaymentRequiredException
@@ -34,36 +35,29 @@ class WalletRepository(BaseRepository[Wallet]):
     ) -> Wallet:
         """Atomically increment/decrement wallet balance in a single SQL operation.
 
-        Args:
-            host_id: Target user ID
-            amount_delta: Amount to add (positive) or deduct (negative)
-            allow_negative: Whether the balance is permitted to drop below zero
-
-        Raises:
-            NotFoundException: If the host wallet does not exist
-            PaymentRequiredException: If decrement would cause negative balance and not allowed
+        Enforces non-negative balance in the SQL WHERE predicate so concurrent deductions
+        cannot race past a read-before-write check.
         """
+        stmt = update(Wallet).where(Wallet.host_id == host_id)
+        if not allow_negative and amount_delta < Decimal("0.0000"):
+            stmt = stmt.where(Wallet.balance + amount_delta >= Decimal("0.0000"))
+
+        stmt = stmt.values(balance=Wallet.balance + amount_delta).returning(Wallet)
+        result = await self.session.execute(stmt)
+        updated_wallet = result.scalar_one_or_none()
+        if updated_wallet is not None:
+            await self.session.flush()
+            return updated_wallet
+
+        # Distinguish missing wallet from insufficient balance only when UPDATE matched 0 rows.
         wallet = await self.get_by_host_id(host_id)
         if not wallet:
-            raise NotFoundException(f"Wallet for host '{host_id}' not found")
+            raise NotFoundException("Host wallet not found")
 
-        is_overdraft = (wallet.balance + amount_delta) < Decimal("0.0000")
-        if not allow_negative and amount_delta < 0 and is_overdraft:
-            required = abs(amount_delta)
-            raise PaymentRequiredException(
-                f"Insufficient funds: Current balance is ${wallet.balance}, required ${required}"
-            )
-
-        stmt = (
-            update(Wallet)
-            .where(Wallet.host_id == host_id)
-            .values(balance=Wallet.balance + amount_delta)
-            .returning(Wallet)
+        required = abs(amount_delta)
+        raise PaymentRequiredException(
+            f"Insufficient funds: Current balance is ${wallet.balance}, required ${required}"
         )
-        result = await self.session.execute(stmt)
-        updated_wallet = result.scalar_one()
-        await self.session.flush()
-        return updated_wallet
 
     async def create_transaction(self, tx: PaymentTransaction) -> PaymentTransaction:
         """Persist a payment or micro-billing transaction record."""
@@ -98,14 +92,35 @@ class WalletRepository(BaseRepository[Wallet]):
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
-    async def get_promo_code_by_code(self, code: str) -> PromoCode | None:
-        """Look up an active promo code by its code identifier."""
-        stmt = select(PromoCode).where(
-            PromoCode.code == code.strip().upper(),
-            PromoCode.is_active.is_(True),
-        )
+    async def get_promo_code_by_code(
+        self, code: str, *, active_only: bool = True
+    ) -> PromoCode | None:
+        """Look up a promo code by its normalized code identifier."""
+        stmt = select(PromoCode).where(PromoCode.code == code.strip().upper())
+        if active_only:
+            stmt = stmt.where(PromoCode.is_active.is_(True))
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def claim_promo_code_atomic(self, code: str, now: datetime) -> PromoCode | None:
+        """Atomically increment promo redemptions_count only while quota and expiry allow."""
+        normalized_code = code.strip().upper()
+        stmt = (
+            update(PromoCode)
+            .where(
+                PromoCode.code == normalized_code,
+                PromoCode.is_active.is_(True),
+                PromoCode.redemptions_count < PromoCode.max_redemptions,
+                or_(PromoCode.expires_at.is_(None), PromoCode.expires_at > now),
+            )
+            .values(redemptions_count=PromoCode.redemptions_count + 1)
+            .returning(PromoCode)
+        )
+        result = await self.session.execute(stmt)
+        claimed = result.scalar_one_or_none()
+        if claimed is not None:
+            await self.session.flush()
+        return claimed
 
     async def record_promo_redemption(self, redemption: PromoRedemption) -> PromoRedemption:
         """Record promo code redemption."""

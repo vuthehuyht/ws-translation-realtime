@@ -3,8 +3,11 @@
 Handles host balance queries, payment top-ups, and 10-second micro-billing deductions.
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
+
+from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import (
     ConflictException,
@@ -105,33 +108,47 @@ class WalletService:
         return wallet
 
     async def redeem_promo(self, host_id: str, code: str) -> Decimal:
-        """Redeem a promotional credit code into the host wallet."""
-        promo = await self.wallet_repo.get_promo_code_by_code(code)
-        if not promo or not promo.is_active:
-            raise NotFoundException(f"Promo code '{code}' is invalid or expired")
+        """Atomically redeem a promotional credit code into the host wallet."""
+        now = datetime.now(UTC)
+        # Claim quota inside a savepoint so duplicate-user IntegrityError rolls back
+        # both the redemption insert and the incremented redemptions_count cleanly.
+        try:
+            async with self.wallet_repo.session.begin_nested():
+                promo = await self.wallet_repo.claim_promo_code_atomic(code=code, now=now)
+                if promo is None:
+                    existing = await self.wallet_repo.get_promo_code_by_code(
+                        code, active_only=False
+                    )
+                    if (
+                        not existing
+                        or not existing.is_active
+                        or (
+                            existing.expires_at is not None
+                            and (
+                                existing.expires_at.replace(tzinfo=UTC)
+                                if existing.expires_at.tzinfo is None
+                                else existing.expires_at
+                            )
+                            <= now
+                        )
+                    ):
+                        raise NotFoundException("Promo code is invalid or expired")
+                    raise ValidationException(
+                        "Promo code has reached its maximum redemptions limit"
+                    )
 
-        if promo.redemptions_count >= promo.max_redemptions:
-            raise ValidationException(
-                f"Promo code '{code}' has reached its maximum redemptions limit"
-            )
+                redemption = PromoRedemption(
+                    promo_code_id=promo.id,
+                    user_id=host_id,
+                    credit_amount=promo.credit_amount,
+                )
+                await self.wallet_repo.record_promo_redemption(redemption)
+        except IntegrityError as exc:
+            raise ConflictException("Promo code has already been redeemed") from exc
 
-        # Credit wallet
         await self.wallet_repo.update_balance_atomic(
             host_id=host_id,
             amount_delta=promo.credit_amount,
             allow_negative=False,
         )
-
-        # Record redemption
-        redemption = PromoRedemption(
-            promo_code_id=promo.id,
-            user_id=host_id,
-            credit_amount=promo.credit_amount,
-        )
-        await self.wallet_repo.record_promo_redemption(redemption)
-
-        # Increment redemptions counter
-        promo.redemptions_count += 1
-        await self.wallet_repo.session.flush()
-
         return promo.credit_amount

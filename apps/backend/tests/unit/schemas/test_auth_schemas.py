@@ -95,6 +95,14 @@ def test_register_request_password_complexity() -> None:
     )
     assert trimmed_req.email == "host.user@example.com"
 
+    # 11. Password exceeding 128 characters is rejected
+    with pytest.raises(ValidationError):
+        RegisterRequest(
+            email="host@example.com",
+            password="Valid1@" + ("a" * 122),
+            fullName="Nguyen Van Host",
+        )
+
 
 def test_confirm_request_validation() -> None:
     # Valid OTP (6 digits) with snake_case and otpCode alias

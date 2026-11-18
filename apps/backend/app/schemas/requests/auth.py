@@ -24,7 +24,9 @@ class RegisterRequest(_EmailRequestBase):
     """Payload for host or user registration."""
 
     email: str = Field(..., pattern=EMAIL_REGEX, description="Valid email address")
-    password: str = Field(..., min_length=8, description="Password min 8 characters")
+    password: str = Field(
+        ..., min_length=8, max_length=128, description="Password 8-128 characters"
+    )
     full_name: str = Field(..., min_length=2, max_length=100, alias="fullName")
     role: str = Field(default="HOST", pattern="^(HOST|LISTENER)$")
 
@@ -66,7 +68,7 @@ class LoginRequest(_EmailRequestBase):
     """Payload for user authentication."""
 
     email: str = Field(..., pattern=EMAIL_REGEX)
-    password: str = Field(..., min_length=1)
+    password: str = Field(..., min_length=1, max_length=128)
     remember_me: bool = Field(default=False, alias="rememberMe")
 
     model_config = ConfigDict(populate_by_name=True)
