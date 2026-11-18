@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
     ConflictException,
+    ForbiddenException,
     NotFoundException,
     TooManyRequestsException,
     UnauthorizedException,
@@ -169,3 +170,71 @@ async def test_auth_service_resend_otp_and_rate_limit(db_session: AsyncSession) 
         await service.resend_otp(ResendOtpRequest(email="resend.test@example.com"))
 
     await fake_redis.aclose()
+
+
+async def test_auth_service_suspended_user_login_fails(db_session: AsyncSession) -> None:
+    user_repo = UserRepository(session=db_session)
+    wallet_repo = WalletRepository(session=db_session)
+    mock_cognito = MockCognitoClient()
+
+    service = AuthService(
+        user_repo=user_repo,
+        wallet_repo=wallet_repo,
+        cognito_client=mock_cognito,
+    )
+
+    reg_res = await service.register(
+        RegisterRequest(
+            email="suspended@example.com",
+            password="ValidPassword123@",
+            fullName="Suspended Host",
+        )
+    )
+    await service.confirm_sign_up(
+        ConfirmRequest(email="suspended@example.com", otpCode="123456")
+    )
+
+    user = await user_repo.get_by_id(reg_res.user_sub)
+    assert user is not None
+    user.status = "SUSPENDED"
+    await user_repo.update(user)
+
+    with pytest.raises(ForbiddenException, match="suspended"):
+        await service.login(
+            LoginRequest(
+                email="suspended@example.com",
+                password="ValidPassword123@",
+            )
+        )
+
+
+async def test_auth_service_login_fails_when_user_missing_in_db(
+    db_session: AsyncSession,
+) -> None:
+    user_repo = UserRepository(session=db_session)
+    wallet_repo = WalletRepository(session=db_session)
+    mock_cognito = MockCognitoClient()
+
+    service = AuthService(
+        user_repo=user_repo,
+        wallet_repo=wallet_repo,
+        cognito_client=mock_cognito,
+    )
+
+    await mock_cognito.sign_up(
+        email="orphan@example.com",
+        password="ValidPassword123@",
+        full_name="Orphan User",
+    )
+    await mock_cognito.confirm_sign_up(
+        email="orphan@example.com",
+        confirmation_code="123456",
+    )
+
+    with pytest.raises(UnauthorizedException, match="not found in database"):
+        await service.login(
+            LoginRequest(
+                email="orphan@example.com",
+                password="ValidPassword123@",
+            )
+        )

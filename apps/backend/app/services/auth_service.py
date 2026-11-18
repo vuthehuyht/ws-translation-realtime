@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import (
     ConflictException,
+    ForbiddenException,
     TooManyRequestsException,
     UnauthorizedException,
 )
@@ -214,6 +215,8 @@ class AuthService:
             raise UnauthorizedException(
                 f"User with email '{normalized_email}' not found in database"
             )
+        if user.status == "SUSPENDED":
+            raise ForbiddenException("Account is suspended")
 
         profile_data = user.profile
         return LoginResponse(

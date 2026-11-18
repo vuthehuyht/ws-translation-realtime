@@ -259,6 +259,8 @@ class AwsCognitoClient(CognitoClient):
         """Authenticate user credentials using InitiateAuth with USER_PASSWORD_AUTH."""
         async with self.session.client("cognito-idp", region_name=self.region) as client:
             try:
+                # Server-side proxy uses USER_PASSWORD_AUTH over TLS because aioboto3 does
+                # not implement Cognito SRP handshakes natively without external SRP libs.
                 response = await client.initiate_auth(
                     ClientId=self.client_id,
                     AuthFlow="USER_PASSWORD_AUTH",
@@ -267,11 +269,25 @@ class AwsCognitoClient(CognitoClient):
                         "PASSWORD": password,
                     },
                 )
-                auth_result = response.get("AuthenticationResult", {})
+                auth_result = response.get("AuthenticationResult")
+                if (
+                    not auth_result
+                    or not auth_result.get("AccessToken")
+                    or not auth_result.get("IdToken")
+                    or not auth_result.get("RefreshToken")
+                ):
+                    challenge_name = response.get("ChallengeName", "UNKNOWN_CHALLENGE")
+                    logger.warning(
+                        "Cognito authenticate did not return complete tokens (challenge=%s)",
+                        challenge_name,
+                    )
+                    raise UnauthorizedException(
+                        f"Additional authentication challenge required: {challenge_name}"
+                    )
                 return {
-                    "accessToken": auth_result.get("AccessToken"),
-                    "idToken": auth_result.get("IdToken"),
-                    "refreshToken": auth_result.get("RefreshToken"),
+                    "accessToken": auth_result["AccessToken"],
+                    "idToken": auth_result["IdToken"],
+                    "refreshToken": auth_result["RefreshToken"],
                     "expiresIn": auth_result.get("ExpiresIn", 3600),
                 }
             except ClientError as e:
@@ -281,6 +297,14 @@ class AwsCognitoClient(CognitoClient):
                     raise UnauthorizedException("Incorrect username or password") from e
                 if error_code == "UserNotConfirmedException":
                     raise UnauthorizedException("User is not confirmed. Please enter OTP") from e
+                if error_code == "PasswordResetRequiredException":
+                    raise UnauthorizedException("Password reset required before signing in") from e
+                if error_code == "InvalidParameterException":
+                    raise ValidationException(error_msg) from e
+                if error_code in ("LimitExceededException", "TooManyRequestsException"):
+                    raise TooManyRequestsException(
+                        "Too many login attempts. Please try again later."
+                    ) from e
                 logger.error("Cognito authenticate ClientError: %s - %s", error_code, error_msg)
                 raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
 
