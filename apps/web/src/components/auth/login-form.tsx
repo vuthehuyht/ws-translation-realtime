@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,16 +13,35 @@ export interface LoginFormData {
 }
 
 interface LoginFormProps {
-  onSubmitSuccess?: (data: LoginFormData) => void;
+  onSubmitSuccess?: (data: LoginFormData) => void | Promise<void>;
+  serverError?: string | null;
+  serverErrorAction?: React.ReactNode;
+  infoBanner?: string | null;
+  initialEmail?: string;
   className?: string;
 }
 
-export function LoginForm({ onSubmitSuccess, className }: LoginFormProps) {
-  const [email, setEmail] = useState("");
+export function LoginForm({
+  onSubmitSuccess,
+  serverError,
+  serverErrorAction,
+  infoBanner,
+  initialEmail = "",
+  className,
+}: LoginFormProps) {
+  const [email, setEmail] = useState(initialEmail);
+  const [hasEditedEmail, setHasEditedEmail] = useState(false);
+
+  useEffect(() => {
+    if (initialEmail && !hasEditedEmail) {
+      setEmail(initialEmail);
+    }
+  }, [initialEmail, hasEditedEmail]);
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [ssoNotice, setSsoNotice] = useState<string | null>(null);
 
   // Validation error states
   const [errors, setErrors] = useState<{
@@ -36,7 +55,7 @@ export function LoginForm({ onSubmitSuccess, className }: LoginFormProps) {
     if (!email.trim()) {
       newErrors.email = "Vui lòng nhập địa chỉ email";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      newErrors.email = "Địa chỉ email không hợp lệ (ví dụ: host@company.com)";
+      newErrors.email = "Địa chỉ email không hợp lệ (ví dụ: name@example.com)";
     }
 
     if (!password) {
@@ -58,8 +77,8 @@ export function LoginForm({ onSubmitSuccess, className }: LoginFormProps) {
 
     try {
       if (onSubmitSuccess) {
-        onSubmitSuccess({
-          email: email.trim(),
+        await onSubmitSuccess({
+          email: email.trim().toLowerCase(),
           password,
           rememberMe,
         });
@@ -80,15 +99,46 @@ export function LoginForm({ onSubmitSuccess, className }: LoginFormProps) {
         </p>
       </div>
 
+      {/* Info / Server Error Banners */}
+      {infoBanner && (
+        <div
+          role="status"
+          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+        >
+          {infoBanner}
+        </div>
+      )}
+
+      {serverError && (
+        <div
+          role="alert"
+          className="space-y-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs font-medium text-destructive"
+        >
+          <p>{serverError}</p>
+          {serverErrorAction && <div>{serverErrorAction}</div>}
+        </div>
+      )}
+
       {/* Social SSO Authentication */}
       <SocialSsoButtons
+        mode="login"
         onGoogleClick={() => {
-          // Placeholder for Cognito Google federated sign-in
+          setSsoNotice(
+            "Đăng nhập bằng Google / Apple SSO đang được phát triển và sẽ sớm ra mắt."
+          );
         }}
         onAppleClick={() => {
-          // Placeholder for Cognito Apple federated sign-in
+          setSsoNotice(
+            "Đăng nhập bằng Google / Apple SSO đang được phát triển và sẽ sớm ra mắt."
+          );
         }}
       />
+
+      {ssoNotice && (
+        <p role="status" className="text-center text-xs font-medium text-amber-600 dark:text-amber-400">
+          {ssoNotice}
+        </p>
+      )}
 
       {/* Elegant Divider */}
       <div className="relative flex items-center justify-center">
@@ -113,9 +163,10 @@ export function LoginForm({ onSubmitSuccess, className }: LoginFormProps) {
             name="email"
             type="email"
             autoComplete="email"
-            placeholder="host@company.com"
+            placeholder="name@example.com"
             value={email}
             onChange={(e) => {
+              setHasEditedEmail(true);
               setEmail(e.target.value);
               if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
             }}

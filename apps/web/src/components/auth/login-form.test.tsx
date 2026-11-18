@@ -89,4 +89,29 @@ describe("LoginForm component", () => {
       });
     });
   });
+
+  it("renders serverError, infoBanner, and initialEmail props", () => {
+    render(
+      <LoginForm
+        serverError="Email hoặc mật khẩu không chính xác."
+        infoBanner="Tài khoản đã xác thực."
+        initialEmail="prefilled@example.com"
+      />
+    );
+
+    expect(
+      screen.getByText("Email hoặc mật khẩu không chính xác.")
+    ).toBeInTheDocument();
+    expect(screen.getByText("Tài khoản đã xác thực.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Địa chỉ Email")).toHaveValue("prefilled@example.com");
+  });
+
+  it("shows coming soon notice when clicking Social SSO buttons", () => {
+    render(<LoginForm />);
+
+    fireEvent.click(screen.getByRole("button", { name: /google/i }));
+    expect(
+      screen.getByText(/đăng nhập bằng google \/ apple sso đang được phát triển/i)
+    ).toBeInTheDocument();
+  });
 });

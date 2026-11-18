@@ -1,6 +1,10 @@
 """API integration tests for Auth Endpoints (/api/v1/auth)."""
 
 from httpx import AsyncClient
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.user import User
 
 
 async def test_auth_api_full_registration_and_login_flow(async_client: AsyncClient) -> None:
@@ -66,9 +70,19 @@ async def test_auth_api_full_registration_and_login_flow(async_client: AsyncClie
     login_data = login_resp.json()
     assert "tokens" in login_data
     assert "accessToken" in login_data["tokens"]
+    assert "idToken" in login_data["tokens"]
+    assert "refreshToken" in login_data["tokens"]
     assert login_data["user"]["email"] == "api.test@example.com"
     assert login_data["user"]["fullName"] == "API Tester"
     assert login_data["user"]["role"] == "HOST"
+
+    # 5. Wrong password returns 401 Unauthorized
+    bad_login_resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": "api.test@example.com", "password": "WrongPassword123!"},
+    )
+    assert bad_login_resp.status_code == 401
+    assert bad_login_resp.json()["error"]["code"] == "UNAUTHORIZED"
 
 
 async def test_auth_api_validation_errors(async_client: AsyncClient) -> None:
@@ -133,3 +147,55 @@ async def test_auth_api_validation_errors(async_client: AsyncClient) -> None:
         json={"email": "nobody@example.com"},
     )
     assert unknown_resend_resp.status_code == 404
+
+    # Empty password on login -> 422
+    empty_pwd_login_resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": "nobody@example.com", "password": ""},
+    )
+    assert empty_pwd_login_resp.status_code == 422
+
+
+async def test_auth_api_login_rejects_unconfirmed_and_suspended_users(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    email = "status.check@example.com"
+    password = "Password123@"
+
+    reg_resp = await async_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "fullName": "Status Checker",
+        },
+    )
+    assert reg_resp.status_code == 201
+
+    # Unconfirmed user cannot log in -> 401
+    unconfirmed_resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert unconfirmed_resp.status_code == 401
+    assert unconfirmed_resp.json()["error"]["code"] == "UNAUTHORIZED"
+
+    # Confirm user, then suspend in PostgreSQL -> 403 FORBIDDEN
+    confirm_resp = await async_client.post(
+        "/api/v1/auth/confirm",
+        json={"email": email, "otpCode": "123456"},
+    )
+    assert confirm_resp.status_code == 200
+
+    await db_session.execute(
+        update(User).where(User.email == email).values(status="SUSPENDED")
+    )
+    await db_session.commit()
+
+    suspended_resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert suspended_resp.status_code == 403
+    assert suspended_resp.json()["error"]["code"] == "FORBIDDEN"

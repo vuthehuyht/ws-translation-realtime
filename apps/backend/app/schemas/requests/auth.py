@@ -66,7 +66,7 @@ class LoginRequest(_EmailRequestBase):
     """Payload for user authentication."""
 
     email: str = Field(..., pattern=EMAIL_REGEX)
-    password: str
+    password: str = Field(..., min_length=1)
 
 
 class ResendOtpRequest(_EmailRequestBase):

@@ -4,20 +4,24 @@ import { cn } from "@/lib/utils";
 interface SocialSsoButtonsProps {
   onGoogleClick?: () => void;
   onAppleClick?: () => void;
+  mode?: "login" | "register";
   className?: string;
 }
 
 export function SocialSsoButtons({
   onGoogleClick,
   onAppleClick,
+  mode = "register",
   className,
 }: SocialSsoButtonsProps) {
+  const actionVerb = mode === "login" ? "Đăng nhập" : "Đăng ký";
+
   return (
     <div className={cn("grid grid-cols-2 gap-3", className)}>
       <button
         type="button"
         onClick={onGoogleClick}
-        aria-label="Đăng ký với Google"
+        aria-label={`${actionVerb} với Google`}
         className="flex h-11 items-center justify-center gap-2.5 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
       >
         <svg
@@ -48,7 +52,7 @@ export function SocialSsoButtons({
       <button
         type="button"
         onClick={onAppleClick}
-        aria-label="Đăng ký với Apple"
+        aria-label={`${actionVerb} với Apple`}
         className="flex h-11 items-center justify-center gap-2.5 rounded-lg border border-border bg-card px-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
       >
         <svg

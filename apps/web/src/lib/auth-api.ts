@@ -64,3 +64,41 @@ export function resendOtp(
     body: JSON.stringify(payload),
   });
 }
+
+export interface LoginHostPayload {
+  email: string;
+  password: string;
+}
+
+export interface LoginTokens {
+  accessToken: string;
+  idToken: string;
+  refreshToken: string;
+  expiresIn: number;
+  tokenType: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  fullName: string | null;
+  defaultSourceLang: string | null;
+  defaultTargetLangs: string[];
+  timezone: string;
+}
+
+export interface LoginHostResponse {
+  tokens: LoginTokens;
+  user: UserProfile;
+}
+
+export function loginHost(
+  payload: LoginHostPayload
+): Promise<LoginHostResponse> {
+  return apiRequest<LoginHostResponse>("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}

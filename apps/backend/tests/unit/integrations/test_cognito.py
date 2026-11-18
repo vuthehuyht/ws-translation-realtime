@@ -177,6 +177,61 @@ async def test_aws_cognito_get_user_info_and_confirm_errors() -> None:
     with pytest.raises(UnauthorizedException, match="Incorrect username or password"):
         await cognito.authenticate("host@example.com", "wrong")
 
+    mock_boto.initiate_auth.side_effect = _make_client_error(
+        "UserNotFoundException", "User does not exist"
+    )
+    with pytest.raises(UnauthorizedException, match="Incorrect username or password"):
+        await cognito.authenticate("missing@example.com", "Password123@")
+
+    mock_boto.initiate_auth.side_effect = _make_client_error(
+        "UserNotConfirmedException", "User is not confirmed"
+    )
+    with pytest.raises(UnauthorizedException, match="not confirmed"):
+        await cognito.authenticate("unconfirmed@example.com", "Password123@")
+
+    mock_boto.initiate_auth.side_effect = _make_client_error(
+        "PasswordResetRequiredException", "Reset required"
+    )
+    with pytest.raises(UnauthorizedException, match="Password reset required"):
+        await cognito.authenticate("reset@example.com", "Password123@")
+
+    mock_boto.initiate_auth.side_effect = _make_client_error(
+        "InvalidParameterException", "Invalid auth parameter"
+    )
+    with pytest.raises(ValidationException, match="Invalid auth parameter"):
+        await cognito.authenticate("host@example.com", "")
+
+    mock_boto.initiate_auth.side_effect = _make_client_error(
+        "TooManyRequestsException", "Rate exceeded"
+    )
+    with pytest.raises(TooManyRequestsException, match="Too many login attempts"):
+        await cognito.authenticate("host@example.com", "Password123@")
+
+    mock_boto.initiate_auth.side_effect = None
+    mock_boto.initiate_auth.return_value = {"ChallengeName": "NEW_PASSWORD_REQUIRED"}
+    with pytest.raises(UnauthorizedException, match="NEW_PASSWORD_REQUIRED"):
+        await cognito.authenticate("host@example.com", "Password123@")
+
+    mock_boto.initiate_auth.return_value = {
+        "AuthenticationResult": {
+            "AccessToken": "acc-aws",
+            "IdToken": "id-aws",
+        }
+    }
+    with pytest.raises(UnauthorizedException, match="authentication challenge"):
+        await cognito.authenticate("host@example.com", "Password123@")
+
+    mock_boto.initiate_auth.return_value = {
+        "AuthenticationResult": {
+            "AccessToken": "acc-aws",
+            "IdToken": "id-aws",
+            "RefreshToken": "ref-aws",
+            "ExpiresIn": 3600,
+        }
+    }
+    ok_auth = await cognito.authenticate("host@example.com", "Password123@")
+    assert ok_auth["accessToken"] == "acc-aws"
+
 
 async def test_aws_cognito_resend_confirmation_code() -> None:
     mock_boto = AsyncMock()
