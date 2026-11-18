@@ -23,6 +23,7 @@ from app.core.exceptions import (
     ValidationException,
 )
 from app.core.security import create_access_token, decode_access_token
+from app.integrations.cognito_jwks import CognitoJwtVerifier
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +77,10 @@ class CognitoClient:
 
     async def global_sign_out(self, access_token: str) -> None:
         """Invalidate every refresh token of the access token's user on all devices."""
+        raise NotImplementedError
+
+    async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
+        """Verify an access token and return its claims; raise ValueError when invalid."""
         raise NotImplementedError
 
     async def get_user_info(self, email: str) -> dict[str, str]:
@@ -202,6 +207,10 @@ class MockCognitoClient(CognitoClient):
             if session.sub == subject:
                 del self.refresh_sessions[token]
 
+    async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
+        # Offline mock tokens are HS256 JWTs signed with the local secret.
+        return decode_access_token(token, verify_exp=verify_exp)
+
     async def get_user_info(self, email: str) -> dict[str, str]:
         user = self.users.get(email)
         if not user:
@@ -220,10 +229,16 @@ class AwsCognitoClient(CognitoClient):
         aws_access_key_id: str | None = None,
         aws_secret_access_key: str | None = None,
         aws_session_token: str | None = None,
+        jwt_verifier: CognitoJwtVerifier | None = None,
     ) -> None:
         self.user_pool_id = user_pool_id
         self.client_id = client_id
         self.region = region
+        self.jwt_verifier = jwt_verifier or CognitoJwtVerifier(
+            region=region,
+            user_pool_id=user_pool_id,
+            client_id=client_id,
+        )
         session_kwargs: dict[str, str] = {"region_name": region}
         if aws_access_key_id and aws_secret_access_key:
             session_kwargs["aws_access_key_id"] = aws_access_key_id
@@ -449,6 +464,10 @@ class AwsCognitoClient(CognitoClient):
                     ) from e
                 logger.error("Cognito global_sign_out ClientError: %s - %s", error_code, error_msg)
                 raise BadGatewayException("Authentication provider error") from e
+
+    async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
+        """Verify a Cognito RS256 access token against the user pool's JWKS."""
+        return await self.jwt_verifier.verify_access_token(token, verify_exp=verify_exp)
 
     @staticmethod
     def _extract_user_info(response: dict[str, Any], email: str) -> dict[str, str]:

@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.db import get_db
 from app.core.exceptions import ForbiddenException, UnauthorizedException
-from app.core.security import decode_access_token
+from app.integrations.cognito import get_cognito_client
 from app.models.user import User
 from app.repositories.room_repository import RoomRepository
 from app.repositories.user_repository import UserRepository
@@ -107,7 +107,8 @@ async def _build_token_context(
 
     token = authorization.split(" ", 1)[1]
     try:
-        payload = decode_access_token(token, verify_exp=verify_exp)
+        # Real Cognito tokens are RS256 (verified via JWKS); offline mode uses local HS256.
+        payload = await get_cognito_client().verify_access_token(token, verify_exp=verify_exp)
     except ValueError as e:
         raise UnauthorizedException(str(e)) from e
 
