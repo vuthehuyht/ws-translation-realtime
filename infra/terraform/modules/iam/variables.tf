@@ -24,3 +24,15 @@ variable "appsync_api_arn" {
   description = "ARN of the AppSync GraphQL API"
   type        = string
 }
+
+variable "secret_arns" {
+  description = "List of Secrets Manager ARNs the ECS execution role may read at task startup"
+  type        = list(string)
+  default     = []
+}
+
+variable "kms_key_arn" {
+  description = "Optional KMS key ARN used to decrypt Secrets Manager secrets"
+  type        = string
+  default     = ""
+}

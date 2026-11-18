@@ -80,44 +80,35 @@ variable "appsync_graphql_url" {
   type        = string
 }
 
-variable "database_url" {
-  description = "Async SQLAlchemy PostgreSQL connection string (optional)"
+variable "cognito_user_pool_id" {
+  description = "Cognito User Pool ID for host authentication"
+  type        = string
+}
+
+variable "cognito_client_id" {
+  description = "Cognito App Client ID for host authentication"
+  type        = string
+}
+
+variable "cors_origins" {
+  description = "Explicit allowed CORS origins for the backend API"
+  type        = list(string)
+}
+
+variable "cookie_secure" {
+  description = "Whether backend auth cookies require HTTPS (Secure flag)"
+  type        = bool
+  default     = true
+}
+
+variable "database_url_secret_arn" {
+  description = "Secrets Manager ARN storing the PostgreSQL asyncpg DATABASE_URL"
   type        = string
   default     = ""
 }
 
-variable "users_table_name" {
-  description = "DynamoDB Users table name"
-  type        = string
-  default     = ""
-}
-
-variable "wallets_table_name" {
-  description = "DynamoDB Wallets table name"
-  type        = string
-  default     = ""
-}
-
-variable "payment_transactions_table_name" {
-  description = "DynamoDB PaymentTransactions table name"
-  type        = string
-  default     = ""
-}
-
-variable "rooms_table_name" {
-  description = "DynamoDB Rooms table name"
-  type        = string
-  default     = ""
-}
-
-variable "room_transcripts_table_name" {
-  description = "DynamoDB RoomTranscripts table name"
-  type        = string
-  default     = ""
-}
-
-variable "usage_ledger_table_name" {
-  description = "DynamoDB UsageLedger table name"
+variable "jwt_secret_key_secret_arn" {
+  description = "Secrets Manager ARN storing the JWT_SECRET_KEY"
   type        = string
   default     = ""
 }

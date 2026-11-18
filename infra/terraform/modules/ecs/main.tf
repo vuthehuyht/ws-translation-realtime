@@ -77,6 +77,20 @@ resource "aws_ecs_task_definition" "web" {
   }
 }
 
+locals {
+  # Map infrastructure env name "prod" to backend Settings Literal "production"
+  app_env = var.environment == "prod" ? "production" : var.environment
+
+  backend_secrets = concat(
+    var.database_url_secret_arn != "" ? [
+      { name = "DATABASE_URL", valueFrom = var.database_url_secret_arn }
+    ] : [],
+    var.jwt_secret_key_secret_arn != "" ? [
+      { name = "JWT_SECRET_KEY", valueFrom = var.jwt_secret_key_secret_arn }
+    ] : []
+  )
+}
+
 # 2. Backend Task Definition (FastAPI + uvloop: 1 vCPU, 2 GB RAM, stopTimeout=120)
 resource "aws_ecs_task_definition" "backend" {
   family                   = "${var.project_name}-${var.environment}-backend"
@@ -101,19 +115,18 @@ resource "aws_ecs_task_definition" "backend" {
         }
       ]
       environment = [
-        { name = "ENV", value = var.environment },
+        { name = "ENV", value = local.app_env },
+        { name = "AWS_REGION", value = var.aws_region },
         { name = "AWS_DEFAULT_REGION", value = var.aws_region },
-        { name = "DATABASE_URL", value = var.database_url },
         { name = "REDIS_URL", value = var.redis_url },
-        { name = "S3_MEDIA_BUCKET", value = var.s3_bucket_name },
-        { name = "APPSYNC_GRAPHQL_URL", value = var.appsync_graphql_url },
-        { name = "DYNAMODB_TABLE_USERS", value = var.users_table_name },
-        { name = "DYNAMODB_TABLE_WALLETS", value = var.wallets_table_name },
-        { name = "DYNAMODB_TABLE_PAYMENTS", value = var.payment_transactions_table_name },
-        { name = "DYNAMODB_TABLE_ROOMS", value = var.rooms_table_name },
-        { name = "DYNAMODB_TABLE_TRANSCRIPTS", value = var.room_transcripts_table_name },
-        { name = "DYNAMODB_TABLE_USAGE_LEDGER", value = var.usage_ledger_table_name }
+        { name = "S3_BUCKET_NAME", value = var.s3_bucket_name },
+        { name = "APPSYNC_ENDPOINT_URL", value = var.appsync_graphql_url },
+        { name = "COGNITO_USER_POOL_ID", value = var.cognito_user_pool_id },
+        { name = "COGNITO_CLIENT_ID", value = var.cognito_client_id },
+        { name = "CORS_ORIGINS", value = jsonencode(var.cors_origins) },
+        { name = "COOKIE_SECURE", value = tostring(var.cookie_secure) }
       ]
+      secrets = local.backend_secrets
       logConfiguration = {
         logDriver = "awslogs"
         options = {

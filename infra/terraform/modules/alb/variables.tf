@@ -23,3 +23,9 @@ variable "security_group_id" {
   description = "Security Group ID of the ALB"
   type        = string
 }
+
+variable "acm_certificate_arn" {
+  description = "Optional ACM certificate ARN to enable HTTPS:443 and redirect HTTP:80 to HTTPS"
+  type        = string
+  default     = ""
+}
