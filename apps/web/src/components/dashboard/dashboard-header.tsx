@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -9,6 +9,7 @@ import {
   LayoutDashboard,
   LogOut,
 } from "lucide-react";
+import { signOutSession } from "@/lib/auth-logout";
 import { clearAuthSession } from "@/lib/auth-storage";
 import { cn } from "@/lib/utils";
 
@@ -43,8 +44,35 @@ export function DashboardHeader({
   const displayName = userName?.trim() || userEmail || "Host";
   const avatarInitial = displayName.charAt(0).toUpperCase();
 
-  const handleLogout = () => {
-    // TODO(TASK-AUTH-08): Call backend logout/Cognito token revocation before clearing local session.
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+  // A ref closes the double-submit window that state alone leaves open within one tick.
+  const signingOutRef = useRef(false);
+
+  const handleLogout = async (global: boolean) => {
+    if (signingOutRef.current) {
+      return;
+    }
+    if (
+      global &&
+      !window.confirm("Đăng xuất khỏi tất cả thiết bị? Mọi phiên đang mở sẽ bị đóng.")
+    ) {
+      return;
+    }
+    signingOutRef.current = true;
+    setIsSigningOut(true);
+    setLogoutError(null);
+    try {
+      await signOutSession({ global });
+    } catch (error) {
+      // Keep the session: clearing locally while the HttpOnly cookie is alive would let silent
+      // refresh sign the user straight back in.
+      console.error("Logout failed", error);
+      setLogoutError("Không thể đăng xuất lúc này. Vui lòng thử lại.");
+      signingOutRef.current = false;
+      setIsSigningOut(false);
+      return;
+    }
     clearAuthSession();
     router.push("/login");
   };
@@ -129,10 +157,27 @@ export function DashboardHeader({
             </div>
           </div>
 
+          {logoutError && (
+            <p role="alert" className="text-xs font-medium text-destructive">
+              {logoutError}
+            </p>
+          )}
+
           <button
             type="button"
-            onClick={handleLogout}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted"
+            onClick={() => void handleLogout(true)}
+            disabled={isSigningOut}
+            title="Đăng xuất khỏi tất cả thiết bị"
+            className="inline-flex items-center rounded-lg px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
+          >
+            Mọi thiết bị
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void handleLogout(false)}
+            disabled={isSigningOut}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
           >
             <LogOut className="h-3.5 w-3.5" />
             <span>Đăng xuất</span>

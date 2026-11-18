@@ -4,6 +4,7 @@ Provides dependency injection for async database transactions, JWT bearer valida
 repositories, domain services, and Redis connection pooling across REST endpoints.
 """
 
+from dataclasses import dataclass
 from typing import Annotated
 
 import redis.asyncio as aioredis
@@ -18,6 +19,7 @@ from app.models.user import User
 from app.repositories.room_repository import RoomRepository
 from app.repositories.user_repository import UserRepository
 from app.repositories.wallet_repository import WalletRepository
+from app.services import token_blocklist
 from app.services.auth_service import AuthService
 from app.services.wallet_service import WalletService
 
@@ -81,22 +83,85 @@ def get_wallet_service(
 
 
 # User authentication dependencies
-def get_current_user_id(
-    authorization: Annotated[str | None, Header()] = None,
-) -> str:
-    """Extract and validate the JWT Bearer token, returning the user's sub identifier."""
+@dataclass(frozen=True, slots=True)
+class AccessTokenContext:
+    """Validated, non-revoked access token and the claims endpoints need from it."""
+
+    token: str
+    subject: str
+    issued_at: int | None
+    expires_at: int | None
+    # Cognito `origin_jti`: identifies the login session that minted this token.
+    session_id: str | None = None
+
+
+async def _build_token_context(
+    redis_client: aioredis.Redis,
+    authorization: str | None,
+    *,
+    verify_exp: bool,
+) -> AccessTokenContext:
+    """Validate the Bearer JWT signature and reject tokens revoked by logout."""
     if not authorization or not authorization.startswith("Bearer "):
         raise UnauthorizedException("Missing or malformed Authorization header")
 
     token = authorization.split(" ", 1)[1]
     try:
-        payload = decode_access_token(token)
-        user_id: str | None = payload.get("sub")
-        if not user_id:
-            raise UnauthorizedException("Token payload missing subject identifier")
-        return user_id
+        payload = decode_access_token(token, verify_exp=verify_exp)
     except ValueError as e:
         raise UnauthorizedException(str(e)) from e
+
+    subject: str | None = payload.get("sub")
+    if not subject:
+        raise UnauthorizedException("Token payload missing subject identifier")
+
+    issued_at = payload.get("iat")
+    expires_at = payload.get("exp")
+    origin_jti = payload.get("origin_jti")
+    context = AccessTokenContext(
+        token=token,
+        subject=subject,
+        issued_at=issued_at if isinstance(issued_at, int) else None,
+        expires_at=expires_at if isinstance(expires_at, int) else None,
+        session_id=origin_jti if isinstance(origin_jti, str) and origin_jti else None,
+    )
+    # Fail-closed: this runs before any Cognito call, so during a Redis outage even logout
+    # returns 503 rather than risk honouring a revoked token.
+    if await token_blocklist.is_revoked(
+        redis_client,
+        token=token,
+        subject=subject,
+        issued_at=context.issued_at,
+        session_id=context.session_id,
+    ):
+        raise UnauthorizedException("Token has been revoked")
+    return context
+
+
+async def get_access_token_context(
+    redis_client: Annotated[aioredis.Redis, Depends(get_redis)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> AccessTokenContext:
+    """Authenticate a request: valid signature, not expired, not revoked."""
+    return await _build_token_context(redis_client, authorization, verify_exp=True)
+
+
+async def get_logout_token_context(
+    redis_client: Annotated[aioredis.Redis, Depends(get_redis)],
+    authorization: Annotated[str | None, Header()] = None,
+) -> AccessTokenContext:
+    """Like get_access_token_context but tolerates an expired token.
+
+    A user with a stale tab must still be able to revoke the refresh cookie on logout.
+    """
+    return await _build_token_context(redis_client, authorization, verify_exp=False)
+
+
+async def get_current_user_id(
+    context: Annotated[AccessTokenContext, Depends(get_access_token_context)],
+) -> str:
+    """Return the sub identifier of the authenticated, non-revoked access token."""
+    return context.subject
 
 
 async def get_current_user(

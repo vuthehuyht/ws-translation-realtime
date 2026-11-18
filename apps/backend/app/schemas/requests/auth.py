@@ -72,6 +72,14 @@ class LoginRequest(_EmailRequestBase):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class LogoutRequest(BaseModel):
+    """Payload for signing out the current device or every device."""
+
+    global_sign_out: bool = Field(default=False, alias="global")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class ResendOtpRequest(_EmailRequestBase):
     """Payload to request resending the 6-digit registration OTP."""
 

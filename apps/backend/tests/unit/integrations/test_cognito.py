@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from botocore.exceptions import ClientError
 
+from app.core.config import Settings
 from app.core.exceptions import (
     BadGatewayException,
     ConflictException,
@@ -13,7 +14,8 @@ from app.core.exceptions import (
     UnauthorizedException,
     ValidationException,
 )
-from app.integrations.cognito import AwsCognitoClient, get_cognito_client
+from app.integrations import cognito as cognito_module
+from app.integrations.cognito import AwsCognitoClient, MockCognitoClient, get_cognito_client
 
 
 def _make_client_error(code: str, message: str = "error") -> ClientError:
@@ -263,10 +265,6 @@ async def test_aws_cognito_resend_confirmation_code() -> None:
 
 
 def test_get_cognito_client_selection_by_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    from app.core.config import Settings
-    from app.integrations import cognito as cognito_module
-    from app.integrations.cognito import MockCognitoClient
-
     monkeypatch.setattr(cognito_module, "_cognito_instance", None)
 
     # 1. env="local" with real Cognito IDs -> AwsCognitoClient

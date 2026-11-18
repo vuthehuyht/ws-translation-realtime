@@ -59,14 +59,19 @@ def create_access_token(
     )
 
 
-def decode_access_token(token: str) -> dict[str, Any]:
-    """Decode and validate a JWT access token signature and expiration."""
+def decode_access_token(token: str, *, verify_exp: bool = True) -> dict[str, Any]:
+    """Decode and validate a JWT access token signature and, by default, its expiration.
+
+    `verify_exp=False` is only for logout, which must still be able to revoke the refresh token
+    of a user whose access token has already expired. The signature is always verified.
+    """
     settings = get_settings()
     try:
         payload = jwt.decode(
             token,
             settings.security.jwt_secret_key,
             algorithms=[settings.security.jwt_algorithm],
+            options={"verify_exp": verify_exp},
         )
         return dict(payload)
     except jwt.ExpiredSignatureError as e:

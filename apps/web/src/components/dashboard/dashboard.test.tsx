@@ -366,9 +366,170 @@ describe("Host Dashboard (SCR-02)", () => {
 
     expect(screen.getAllByText("Hội nghị Đối tác Q4").length).toBeGreaterThan(0);
 
-    // Logout clears session and redirects to /login
+    // Logout revokes the session on the backend, clears local state and redirects to /login
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
     fireEvent.click(screen.getByRole("button", { name: /đăng xuất/i }));
-    expect(pushMock).toHaveBeenCalledWith("/login");
+    await waitFor(() => {
+      expect(pushMock).toHaveBeenCalledWith("/login");
+    });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toContain("/api/v1/auth/logout");
+    expect(init?.body).toBe(JSON.stringify({ global: false }));
+    expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer acc-1");
     expect(window.localStorage.length).toBe(0);
+  });
+
+  describe("logout (TASK-AUTH-08)", () => {
+    const seedSession = () =>
+      saveAuthSession(
+        {
+          tokens: {
+            accessToken: "acc-logout",
+            idToken: "id-logout",
+            expiresIn: 3600,
+            tokenType: "Bearer",
+          },
+          user: {
+            id: "user-1",
+            email: "host@example.com",
+            role: "HOST",
+            status: "ACTIVE",
+            fullName: "Nguyen Van A",
+            defaultSourceLang: "vi-VN",
+            defaultTargetLangs: ["en-US"],
+            timezone: "Asia/Ho_Chi_Minh",
+          },
+        },
+        true
+      );
+
+    it("keeps the session and shows an error when the backend cannot revoke the token", async () => {
+      seedSession();
+      vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: { code: "BAD_GATEWAY", message: "down" } }), {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+      render(
+        <DashboardLayout>
+          <DashboardPage />
+        </DashboardLayout>
+      );
+      await screen.findByRole("button", { name: /đăng xuất$/i });
+
+      fireEvent.click(screen.getByRole("button", { name: /đăng xuất$/i }));
+
+      expect(await screen.findByRole("alert")).toHaveTextContent(/không thể đăng xuất/i);
+      expect(pushMock).not.toHaveBeenCalledWith("/login");
+      expect(getAuthSession()?.tokens.accessToken).toBe("acc-logout");
+    });
+
+    it("sends global=true when signing out of every device", async () => {
+      seedSession();
+      const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(true);
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+      render(
+        <DashboardLayout>
+          <DashboardPage />
+        </DashboardLayout>
+      );
+      await screen.findByRole("button", { name: /mọi thiết bị/i });
+
+      fireEvent.click(screen.getByRole("button", { name: /mọi thiết bị/i }));
+
+      await waitFor(() => {
+        expect(pushMock).toHaveBeenCalledWith("/login");
+      });
+      expect(confirmMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][1]?.body).toBe(JSON.stringify({ global: true }));
+      expect(getAuthSession()).toBeNull();
+    });
+
+    it("does nothing when the user cancels the sign-out-everywhere confirmation", async () => {
+      seedSession();
+      vi.spyOn(window, "confirm").mockReturnValue(false);
+      const fetchMock = vi.spyOn(globalThis, "fetch");
+
+      render(
+        <DashboardLayout>
+          <DashboardPage />
+        </DashboardLayout>
+      );
+      await screen.findByRole("button", { name: /mọi thiết bị/i });
+
+      fireEvent.click(screen.getByRole("button", { name: /mọi thiết bị/i }));
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(pushMock).not.toHaveBeenCalledWith("/login");
+      expect(getAuthSession()?.tokens.accessToken).toBe("acc-logout");
+    });
+
+    it("disables both buttons and sends a single request while signing out", async () => {
+      seedSession();
+      let resolveLogout!: (response: Response) => void;
+      const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            resolveLogout = resolve;
+          })
+      );
+
+      render(
+        <DashboardLayout>
+          <DashboardPage />
+        </DashboardLayout>
+      );
+      const logoutButton = await screen.findByRole("button", { name: /đăng xuất$/i });
+
+      fireEvent.click(logoutButton);
+      fireEvent.click(logoutButton);
+
+      await waitFor(() => {
+        expect(logoutButton).toBeDisabled();
+      });
+      expect(screen.getByRole("button", { name: /mọi thiết bị/i })).toBeDisabled();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+
+      resolveLogout(new Response(null, { status: 204 }));
+      await waitFor(() => {
+        expect(pushMock).toHaveBeenCalledWith("/login");
+      });
+    });
+
+    it("re-enables the buttons after a failed sign-out so the user can retry", async () => {
+      seedSession();
+      vi.spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ error: { code: "BAD_GATEWAY", message: "down" } }), {
+            status: 502,
+            headers: { "Content-Type": "application/json" },
+          })
+        )
+        .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+      render(
+        <DashboardLayout>
+          <DashboardPage />
+        </DashboardLayout>
+      );
+      const logoutButton = await screen.findByRole("button", { name: /đăng xuất$/i });
+
+      fireEvent.click(logoutButton);
+      await screen.findByRole("alert");
+      expect(logoutButton).toBeEnabled();
+
+      fireEvent.click(logoutButton);
+      await waitFor(() => {
+        expect(pushMock).toHaveBeenCalledWith("/login");
+      });
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
   });
 });
