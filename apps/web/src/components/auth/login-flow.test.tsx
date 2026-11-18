@@ -84,15 +84,18 @@ describe("LoginPage integration flow", () => {
       "http://localhost:8000/api/v1/auth/login",
       expect.objectContaining({
         method: "POST",
+        credentials: "include",
         body: JSON.stringify({
           email: "host@example.com",
           password: "Password123!",
+          rememberMe: true,
         }),
       })
     );
 
     const saved = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
     expect(saved).not.toBeNull();
+    expect(JSON.parse(saved as string).tokens.refreshToken).toBeUndefined();
     expect(window.sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY)).toBeNull();
   });
 

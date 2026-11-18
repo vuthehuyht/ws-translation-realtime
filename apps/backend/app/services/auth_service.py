@@ -3,9 +3,11 @@
 Orchestrates Cognito integration with PostgreSQL User and Wallet repositories.
 """
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 
+import jwt
 import redis.asyncio as aioredis
 from sqlalchemy.exc import IntegrityError
 
@@ -29,6 +31,7 @@ from app.schemas.requests import (
 from app.schemas.responses import (
     ConfirmResponse,
     LoginResponse,
+    RefreshResponse,
     RegisterResponse,
     ResendOtpResponse,
     TokenResponse,
@@ -37,6 +40,22 @@ from app.schemas.responses import (
 
 WELCOME_BONUS_AMOUNT = Decimal("2.0000")
 RESEND_OTP_COOLDOWN_SECONDS = 60
+
+
+@dataclass(frozen=True, slots=True)
+class LoginResult:
+    """Public login payload plus the refresh token that must only be set as an HttpOnly cookie."""
+
+    response: LoginResponse
+    refresh_token: str
+
+
+@dataclass(frozen=True, slots=True)
+class RefreshResult:
+    """Public refresh payload plus the rotated refresh token (None if Cognito did not rotate)."""
+
+    response: RefreshResponse
+    refresh_token: str | None
 
 
 class AuthService:
@@ -199,7 +218,15 @@ class AuthService:
             retry_after=RESEND_OTP_COOLDOWN_SECONDS,
         )
 
-    async def login(self, request: LoginRequest) -> LoginResponse:
+    @staticmethod
+    def _ensure_active(user: User) -> None:
+        """Default-deny: only ACTIVE accounts may obtain or renew a session."""
+        if user.status == "SUSPENDED":
+            raise ForbiddenException("Account is suspended")
+        if user.status != "ACTIVE":
+            raise ForbiddenException("Account is not active")
+
+    async def login(self, request: LoginRequest) -> LoginResult:
         """Authenticate user against Cognito and retrieve profile details from database."""
         normalized_email = request.email.strip().lower()
 
@@ -215,25 +242,75 @@ class AuthService:
             raise UnauthorizedException(
                 f"User with email '{normalized_email}' not found in database"
             )
-        if user.status == "SUSPENDED":
-            raise ForbiddenException("Account is suspended")
+        self._ensure_active(user)
 
+        return LoginResult(
+            response=LoginResponse(
+                tokens=TokenResponse(
+                    access_token=auth_tokens["accessToken"],
+                    id_token=auth_tokens["idToken"],
+                    expires_in=auth_tokens.get("expiresIn", 3600),
+                ),
+                user=self._build_user_profile(user),
+            ),
+            refresh_token=auth_tokens["refreshToken"],
+        )
+
+    @staticmethod
+    def _build_user_profile(user: User) -> UserProfileResponse:
+        """Map User ORM entity and optional profile relation into UserProfileResponse."""
         profile_data = user.profile
-        return LoginResponse(
-            tokens=TokenResponse(
-                access_token=auth_tokens["accessToken"],
-                id_token=auth_tokens["idToken"],
-                refresh_token=auth_tokens["refreshToken"],
-                expires_in=auth_tokens.get("expiresIn", 3600),
+        return UserProfileResponse(
+            id=user.id,
+            email=user.email,
+            role=user.role,
+            status=user.status,
+            full_name=profile_data.full_name if profile_data else None,
+            default_source_lang=profile_data.default_source_lang if profile_data else "vi-VN",
+            default_target_langs=profile_data.default_target_langs if profile_data else [],
+            timezone=profile_data.timezone if profile_data else "Asia/Ho_Chi_Minh",
+        )
+
+    async def refresh_session(self, refresh_token: str) -> RefreshResult:
+        """Refresh access and ID tokens via Cognito while enforcing account status."""
+        normalized_token = refresh_token.strip()
+        if not normalized_token:
+            raise UnauthorizedException("Missing refresh token")
+
+        refreshed = await self.cognito.refresh_tokens(normalized_token)
+
+        # Decode unverified claims solely to read sub because the token was just
+        # received directly over TLS from Cognito InitiateAuth.
+        sub: str | None = None
+        for token_key in ("idToken", "accessToken"):
+            raw_jwt = refreshed.get(token_key)
+            if not raw_jwt:
+                continue
+            try:
+                claims = jwt.decode(raw_jwt, options={"verify_signature": False})
+                candidate = claims.get("sub")
+                if isinstance(candidate, str) and candidate:
+                    sub = candidate
+                    break
+            except jwt.PyJWTError:
+                continue
+
+        if not sub:
+            raise UnauthorizedException("Refreshed token missing subject identifier")
+
+        user = await self.user_repo.get_by_id(sub)
+        if not user:
+            raise UnauthorizedException(f"User '{sub}' not found in database")
+        self._ensure_active(user)
+
+        return RefreshResult(
+            response=RefreshResponse(
+                tokens=TokenResponse(
+                    access_token=refreshed["accessToken"],
+                    id_token=refreshed["idToken"],
+                    expires_in=refreshed.get("expiresIn", 3600),
+                ),
+                user=self._build_user_profile(user),
             ),
-            user=UserProfileResponse(
-                id=user.id,
-                email=user.email,
-                role=user.role,
-                status=user.status,
-                full_name=profile_data.full_name if profile_data else None,
-                default_source_lang=profile_data.default_source_lang if profile_data else "vi-VN",
-                default_target_langs=profile_data.default_target_langs if profile_data else [],
-                timezone=profile_data.timezone if profile_data else "Asia/Ho_Chi_Minh",
-            ),
+            refresh_token=refreshed.get("refreshToken"),
         )

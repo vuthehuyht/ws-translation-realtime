@@ -67,6 +67,9 @@ class LoginRequest(_EmailRequestBase):
 
     email: str = Field(..., pattern=EMAIL_REGEX)
     password: str = Field(..., min_length=1)
+    remember_me: bool = Field(default=False, alias="rememberMe")
+
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class ResendOtpRequest(_EmailRequestBase):

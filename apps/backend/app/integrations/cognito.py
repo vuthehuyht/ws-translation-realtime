@@ -57,6 +57,10 @@ class CognitoClient:
         """Authenticate user credentials."""
         raise NotImplementedError
 
+    async def refresh_tokens(self, refresh_token: str) -> dict[str, Any]:
+        """Refresh AccessToken and IdToken using Cognito REFRESH_TOKEN_AUTH."""
+        raise NotImplementedError
+
     async def get_user_info(self, email: str) -> dict[str, str]:
         """Fetch user attributes (sub, name) from Cognito."""
         raise NotImplementedError
@@ -125,10 +129,40 @@ class MockCognitoClient(CognitoClient):
             subject=user.sub,
             claims={"email": user.email, "name": user.full_name},
         )
+        id_token = create_access_token(
+            subject=user.sub,
+            claims={"email": user.email, "name": user.full_name, "token_use": "id"},
+        )
         return {
             "accessToken": access_token,
-            "idToken": access_token,
+            "idToken": id_token,
             "refreshToken": f"mock_refresh_{user.sub}",
+            "expiresIn": 3600,
+        }
+
+    async def refresh_tokens(self, refresh_token: str) -> dict[str, Any]:
+        if not refresh_token.startswith("mock_refresh_"):
+            raise UnauthorizedException("Invalid or expired refresh token")
+
+        target_sub = refresh_token.removeprefix("mock_refresh_")
+        user = next((u for u in self.users.values() if u.sub == target_sub), None)
+        if not user or not user.is_confirmed:
+            raise UnauthorizedException("Invalid or expired refresh token")
+
+        from app.core.security import create_access_token
+
+        access_token = create_access_token(
+            subject=user.sub,
+            claims={"email": user.email, "name": user.full_name},
+        )
+        id_token = create_access_token(
+            subject=user.sub,
+            claims={"email": user.email, "name": user.full_name, "token_use": "id"},
+        )
+        return {
+            "accessToken": access_token,
+            "idToken": id_token,
+            "refreshToken": None,
             "expiresIn": 3600,
         }
 
@@ -255,6 +289,36 @@ class AwsCognitoClient(CognitoClient):
                 )
                 raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
 
+    @staticmethod
+    def _extract_auth_tokens(
+        response: dict[str, Any],
+        *,
+        require_refresh_token: bool,
+    ) -> dict[str, Any]:
+        """Extract and validate Cognito AuthenticationResult token fields."""
+        auth_result = response.get("AuthenticationResult")
+        has_refresh = bool(auth_result and auth_result.get("RefreshToken"))
+        if (
+            not auth_result
+            or not auth_result.get("AccessToken")
+            or not auth_result.get("IdToken")
+            or (require_refresh_token and not has_refresh)
+        ):
+            challenge_name = response.get("ChallengeName", "UNKNOWN_CHALLENGE")
+            logger.warning(
+                "Cognito initiate_auth did not return complete tokens (challenge=%s)",
+                challenge_name,
+            )
+            raise UnauthorizedException(
+                f"Additional authentication challenge required: {challenge_name}"
+            )
+        return {
+            "accessToken": auth_result["AccessToken"],
+            "idToken": auth_result["IdToken"],
+            "refreshToken": auth_result.get("RefreshToken"),
+            "expiresIn": auth_result.get("ExpiresIn", 3600),
+        }
+
     async def authenticate(self, email: str, password: str) -> dict[str, Any]:
         """Authenticate user credentials using InitiateAuth with USER_PASSWORD_AUTH."""
         async with self.session.client("cognito-idp", region_name=self.region) as client:
@@ -269,27 +333,7 @@ class AwsCognitoClient(CognitoClient):
                         "PASSWORD": password,
                     },
                 )
-                auth_result = response.get("AuthenticationResult")
-                if (
-                    not auth_result
-                    or not auth_result.get("AccessToken")
-                    or not auth_result.get("IdToken")
-                    or not auth_result.get("RefreshToken")
-                ):
-                    challenge_name = response.get("ChallengeName", "UNKNOWN_CHALLENGE")
-                    logger.warning(
-                        "Cognito authenticate did not return complete tokens (challenge=%s)",
-                        challenge_name,
-                    )
-                    raise UnauthorizedException(
-                        f"Additional authentication challenge required: {challenge_name}"
-                    )
-                return {
-                    "accessToken": auth_result["AccessToken"],
-                    "idToken": auth_result["IdToken"],
-                    "refreshToken": auth_result["RefreshToken"],
-                    "expiresIn": auth_result.get("ExpiresIn", 3600),
-                }
+                return self._extract_auth_tokens(response, require_refresh_token=True)
             except ClientError as e:
                 error_code = e.response.get("Error", {}).get("Code")
                 error_msg = e.response.get("Error", {}).get("Message", str(e))
@@ -306,6 +350,30 @@ class AwsCognitoClient(CognitoClient):
                         "Too many login attempts. Please try again later."
                     ) from e
                 logger.error("Cognito authenticate ClientError: %s - %s", error_code, error_msg)
+                raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
+
+    async def refresh_tokens(self, refresh_token: str) -> dict[str, Any]:
+        """Exchange a Cognito refresh token for fresh AccessToken and IdToken."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                response = await client.initiate_auth(
+                    ClientId=self.client_id,
+                    AuthFlow="REFRESH_TOKEN_AUTH",
+                    AuthParameters={"REFRESH_TOKEN": refresh_token},
+                )
+                return self._extract_auth_tokens(response, require_refresh_token=False)
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code in ("NotAuthorizedException", "UserNotFoundException"):
+                    raise UnauthorizedException("Invalid or expired refresh token") from e
+                if error_code == "InvalidParameterException":
+                    raise ValidationException(error_msg) from e
+                if error_code in ("LimitExceededException", "TooManyRequestsException"):
+                    raise TooManyRequestsException(
+                        "Too many token refresh requests. Please try again later."
+                    ) from e
+                logger.error("Cognito refresh_tokens ClientError: %s - %s", error_code, error_msg)
                 raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
 
     @staticmethod

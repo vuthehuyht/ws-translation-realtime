@@ -1,5 +1,6 @@
 """API integration tests for Auth Endpoints (/api/v1/auth)."""
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,7 +72,11 @@ async def test_auth_api_full_registration_and_login_flow(async_client: AsyncClie
     assert "tokens" in login_data
     assert "accessToken" in login_data["tokens"]
     assert "idToken" in login_data["tokens"]
-    assert "refreshToken" in login_data["tokens"]
+    # Refresh token must only travel in the HttpOnly cookie, never in the JSON body.
+    assert "refreshToken" not in login_data["tokens"]
+    assert any(
+        h.startswith("ws_refresh_token=") for h in login_resp.headers.get_list("set-cookie")
+    )
     assert login_data["user"]["email"] == "api.test@example.com"
     assert login_data["user"]["fullName"] == "API Tester"
     assert login_data["user"]["role"] == "HOST"
@@ -199,3 +204,171 @@ async def test_auth_api_login_rejects_unconfirmed_and_suspended_users(
     )
     assert suspended_resp.status_code == 403
     assert suspended_resp.json()["error"]["code"] == "FORBIDDEN"
+
+
+async def test_auth_api_refresh_token_cookie_only(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Register & confirm user
+    await async_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "refresh.api@example.com",
+            "password": "Password123@",
+            "fullName": "Refresh API Host",
+        },
+    )
+    await async_client.post(
+        "/api/v1/auth/confirm",
+        json={"email": "refresh.api@example.com", "otpCode": "123456"},
+    )
+
+    # 1. Login with rememberMe=True sets persistent HttpOnly refresh cookie
+    login_resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "refresh.api@example.com",
+            "password": "Password123@",
+            "rememberMe": True,
+        },
+    )
+    assert login_resp.status_code == 200
+    login_data = login_resp.json()
+    assert "refreshToken" not in login_data["tokens"]
+    user_id = login_data["user"]["id"]
+    set_cookie_headers = login_resp.headers.get_list("set-cookie")
+    refresh_cookie_header = next(h for h in set_cookie_headers if h.startswith("ws_refresh_token="))
+    refresh_token = refresh_cookie_header.split(";", 1)[0].removeprefix("ws_refresh_token=")
+    assert refresh_token
+    assert "HttpOnly" in refresh_cookie_header
+    assert "Path=/api/v1/auth" in refresh_cookie_header
+    assert "Max-Age=" in refresh_cookie_header
+
+    # 2. Refresh via HttpOnly cookie with empty body succeeds
+    cookie_refresh_resp = await async_client.post("/api/v1/auth/refresh")
+    assert cookie_refresh_resp.status_code == 200
+    refreshed_data = cookie_refresh_resp.json()
+    assert refreshed_data["tokens"]["accessToken"]
+    assert refreshed_data["tokens"]["idToken"]
+    assert refreshed_data["user"]["email"] == "refresh.api@example.com"
+    assert "refreshToken" not in refreshed_data["tokens"]
+
+    # 3. A body token is ignored: without the cookie the request is rejected even if the
+    # body carries a valid refresh token.
+    async_client.cookies.clear()
+    body_refresh_resp = await async_client.post(
+        "/api/v1/auth/refresh",
+        json={"refreshToken": refresh_token},
+    )
+    assert body_refresh_resp.status_code == 401
+
+    # 4. Missing cookie -> 401
+    missing_resp = await async_client.post("/api/v1/auth/refresh", json={})
+    assert missing_resp.status_code == 401
+    assert missing_resp.json()["error"]["code"] == "UNAUTHORIZED"
+
+    # 5. Invalid cookie token -> 401 and clears cookies
+    async_client.cookies.set("ws_refresh_token", "invalid_token", path="/api/v1/auth")
+    bad_resp = await async_client.post("/api/v1/auth/refresh")
+    assert bad_resp.status_code == 401
+    cleared_headers = bad_resp.headers.get_list("set-cookie")
+    assert any(h.startswith('ws_refresh_token=""') and "Max-Age=0" in h for h in cleared_headers)
+
+    # 6. Suspended user -> 403 and clears cookies
+    await db_session.execute(
+        update(User).where(User.id == user_id).values(status="SUSPENDED")
+    )
+    await db_session.commit()
+    async_client.cookies.set("ws_refresh_token", refresh_token, path="/api/v1/auth")
+    suspended_resp = await async_client.post("/api/v1/auth/refresh")
+    assert suspended_resp.status_code == 403
+    assert suspended_resp.json()["error"]["code"] == "FORBIDDEN"
+    assert any(
+        h.startswith('ws_refresh_token=""') and "Max-Age=0" in h
+        for h in suspended_resp.headers.get_list("set-cookie")
+    )
+
+
+async def test_auth_api_session_cookie_without_remember_me_and_token_rotation(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await async_client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "session.cookie@example.com",
+            "password": "Password123@",
+            "fullName": "Session Cookie Host",
+        },
+    )
+    await async_client.post(
+        "/api/v1/auth/confirm",
+        json={"email": "session.cookie@example.com", "otpCode": "123456"},
+    )
+
+    # 1. Login with rememberMe=False sets session cookie (no Max-Age)
+    login_resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "session.cookie@example.com",
+            "password": "Password123@",
+            "rememberMe": False,
+        },
+    )
+    assert login_resp.status_code == 200
+    set_cookie_headers = login_resp.headers.get_list("set-cookie")
+    refresh_cookie = next(h for h in set_cookie_headers if h.startswith("ws_refresh_token="))
+    assert "HttpOnly" in refresh_cookie
+    assert "Max-Age=" not in refresh_cookie
+    assert any(
+        h.startswith('ws_remember_me=""') and "Max-Age=0" in h
+        for h in set_cookie_headers
+    )
+
+    # 2. Refresh updates ws_refresh_token cookie when Cognito rotates RefreshToken
+    from app.integrations.cognito import get_cognito_client
+
+    cognito = get_cognito_client()
+    orig_refresh = cognito.refresh_tokens
+
+    async def rotated_refresh(token: str) -> dict[str, object]:
+        result = await orig_refresh(token)
+        result["refreshToken"] = "rotated_refresh_token_value"
+        return result
+
+    monkeypatch.setattr(cognito, "refresh_tokens", rotated_refresh)
+    rotated_resp = await async_client.post("/api/v1/auth/refresh")
+    assert rotated_resp.status_code == 200
+    assert "refreshToken" not in rotated_resp.json()["tokens"]
+    rotated_cookies = rotated_resp.headers.get_list("set-cookie")
+    assert any(
+        h.startswith("ws_refresh_token=rotated_refresh_token_value")
+        for h in rotated_cookies
+    )
+
+
+async def test_auth_api_refresh_rejects_token_without_subject_and_clears_cookies(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.integrations.cognito import get_cognito_client
+
+    async def malformed_refresh(_token: str) -> dict[str, object]:
+        return {
+            "accessToken": "not-a-jwt",
+            "idToken": "also-not-a-jwt",
+            "refreshToken": None,
+            "expiresIn": 3600,
+        }
+
+    monkeypatch.setattr(get_cognito_client(), "refresh_tokens", malformed_refresh)
+    async_client.cookies.set("ws_refresh_token", "mock_refresh_any", path="/api/v1/auth")
+
+    resp = await async_client.post("/api/v1/auth/refresh")
+
+    assert resp.status_code == 401
+    assert any(
+        h.startswith('ws_refresh_token=""') and "Max-Age=0" in h
+        for h in resp.headers.get_list("set-cookie")
+    )

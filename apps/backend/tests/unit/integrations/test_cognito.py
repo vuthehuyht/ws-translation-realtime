@@ -300,3 +300,81 @@ def test_get_cognito_client_selection_by_env(monkeypatch: pytest.MonkeyPatch) ->
     )
     monkeypatch.setattr(cognito_module, "get_settings", lambda: test_settings)
     assert isinstance(cognito_module.get_cognito_client(), MockCognitoClient)
+
+
+async def test_mock_cognito_refresh_tokens_lifecycle() -> None:
+    cognito = get_cognito_client()
+    email = "refresh_mock@example.com"
+    password = "SecurePassword123@"
+
+    await cognito.sign_up(email=email, password=password, full_name="Refresh User")
+    await cognito.confirm_sign_up(email=email, confirmation_code="123456")
+    auth_result = await cognito.authenticate(email=email, password=password)
+
+    refreshed = await cognito.refresh_tokens(auth_result["refreshToken"])
+    assert refreshed["accessToken"]
+    assert refreshed["idToken"]
+    assert refreshed["refreshToken"] is None
+    assert refreshed["expiresIn"] == 3600
+
+    with pytest.raises(UnauthorizedException, match="Invalid or expired refresh token"):
+        await cognito.refresh_tokens("invalid_refresh_token")
+
+    with pytest.raises(UnauthorizedException, match="Invalid or expired refresh token"):
+        await cognito.refresh_tokens("mock_refresh_nonexistent-sub")
+
+
+async def test_aws_cognito_refresh_tokens_success_and_errors() -> None:
+    mock_boto = AsyncMock()
+    mock_boto.initiate_auth.return_value = {
+        "AuthenticationResult": {
+            "AccessToken": "new-access-jwt",
+            "IdToken": "new-id-jwt",
+            "ExpiresIn": 3600,
+        }
+    }
+    cognito = _make_aws_cognito_with_mock_client(mock_boto)
+
+    res = await cognito.refresh_tokens("rt-abc")
+    assert res == {
+        "accessToken": "new-access-jwt",
+        "idToken": "new-id-jwt",
+        "refreshToken": None,
+        "expiresIn": 3600,
+    }
+    mock_boto.initiate_auth.assert_awaited_once_with(
+        ClientId="testclientid",
+        AuthFlow="REFRESH_TOKEN_AUTH",
+        AuthParameters={"REFRESH_TOKEN": "rt-abc"},
+    )
+
+    # Rotation case where Cognito issues a new RefreshToken
+    mock_boto.initiate_auth.return_value = {
+        "AuthenticationResult": {
+            "AccessToken": "rot-access",
+            "IdToken": "rot-id",
+            "RefreshToken": "rt-rotated",
+            "ExpiresIn": 1800,
+        }
+    }
+    rotated = await cognito.refresh_tokens("rt-abc")
+    assert rotated["refreshToken"] == "rt-rotated"
+    assert rotated["expiresIn"] == 1800
+
+    # Incomplete AuthenticationResult raises UnauthorizedException
+    mock_boto.initiate_auth.return_value = {"ChallengeName": "NEW_PASSWORD_REQUIRED"}
+    with pytest.raises(UnauthorizedException, match="challenge"):
+        await cognito.refresh_tokens("rt-abc")
+
+    # Error mappings
+    mock_boto.initiate_auth.side_effect = _make_client_error("NotAuthorizedException", "Revoked")
+    with pytest.raises(UnauthorizedException, match="Invalid or expired refresh token"):
+        await cognito.refresh_tokens("rt-abc")
+
+    mock_boto.initiate_auth.side_effect = _make_client_error("TooManyRequestsException", "Slow")
+    with pytest.raises(TooManyRequestsException, match="Too many"):
+        await cognito.refresh_tokens("rt-abc")
+
+    mock_boto.initiate_auth.side_effect = _make_client_error("InternalErrorException", "Down")
+    with pytest.raises(BadGatewayException, match="Down"):
+        await cognito.refresh_tokens("rt-abc")

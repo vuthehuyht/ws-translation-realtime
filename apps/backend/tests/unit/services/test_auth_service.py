@@ -89,10 +89,14 @@ async def test_auth_service_registration_and_confirmation_lifecycle(
         password="SuperPassword123@",
     )
     login_res = await service.login(login_req)
-    assert login_res.tokens.access_token is not None
-    assert login_res.user.email == "host.new@example.com"
-    assert login_res.user.full_name == "Nguyễn Văn A"
-    assert login_res.user.role == "HOST"
+    assert login_res.response.tokens.access_token is not None
+    assert login_res.response.tokens.id_token != login_res.response.tokens.access_token
+    assert login_res.refresh_token
+    assert login_res.response.user.email == "host.new@example.com"
+    assert login_res.response.user.full_name == "Nguyễn Văn A"
+    assert login_res.response.user.role == "HOST"
+    # The public payload must never carry the refresh token.
+    assert "refreshToken" not in login_res.response.model_dump(by_alias=True)["tokens"]
 
 
 async def test_auth_service_login_with_wrong_password_fails(db_session: AsyncSession) -> None:
@@ -238,3 +242,82 @@ async def test_auth_service_login_fails_when_user_missing_in_db(
                 password="ValidPassword123@",
             )
         )
+
+
+async def test_auth_service_refresh_session_success_and_guards(
+    db_session: AsyncSession,
+) -> None:
+    user_repo = UserRepository(session=db_session)
+    wallet_repo = WalletRepository(session=db_session)
+    mock_cognito = MockCognitoClient()
+    service = AuthService(user_repo=user_repo, wallet_repo=wallet_repo, cognito_client=mock_cognito)
+
+    reg_res = await service.register(
+        RegisterRequest(
+            email="refresh.svc@example.com",
+            password="ValidPassword123@",
+            fullName="Refresh Host",
+        )
+    )
+    await service.confirm_sign_up(
+        ConfirmRequest(email="refresh.svc@example.com", otpCode="123456")
+    )
+    login_res = await service.login(
+        LoginRequest(email="refresh.svc@example.com", password="ValidPassword123@")
+    )
+
+    # 1. Valid refresh returns new access/id tokens and user profile
+    refreshed = await service.refresh_session(login_res.refresh_token)
+    assert refreshed.response.tokens.access_token
+    assert refreshed.response.tokens.id_token
+    assert refreshed.refresh_token is None
+    assert refreshed.response.tokens.expires_in == 3600
+    assert refreshed.response.user.id == reg_res.user_sub
+    assert refreshed.response.user.email == "refresh.svc@example.com"
+
+    # 2. Blank refresh token raises UnauthorizedException
+    with pytest.raises(UnauthorizedException, match="Missing refresh token"):
+        await service.refresh_session("   ")
+
+    # 3. Suspended user cannot refresh session
+    db_user = await user_repo.get_by_id(reg_res.user_sub)
+    assert db_user is not None
+    db_user.status = "SUSPENDED"
+    await user_repo.update(db_user)
+
+    with pytest.raises(ForbiddenException, match="suspended"):
+        await service.refresh_session(login_res.refresh_token)
+
+    # 4. Any non-ACTIVE status is denied by default (login and refresh)
+    db_user.status = "PENDING"
+    await user_repo.update(db_user)
+
+    with pytest.raises(ForbiddenException, match="not active"):
+        await service.refresh_session(login_res.refresh_token)
+    with pytest.raises(ForbiddenException, match="not active"):
+        await service.login(
+            LoginRequest(email="refresh.svc@example.com", password="ValidPassword123@")
+        )
+
+
+async def test_auth_service_refresh_rejects_token_without_subject(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    user_repo = UserRepository(session=db_session)
+    wallet_repo = WalletRepository(session=db_session)
+    mock_cognito = MockCognitoClient()
+    service = AuthService(user_repo=user_repo, wallet_repo=wallet_repo, cognito_client=mock_cognito)
+
+    async def malformed_refresh(_token: str) -> dict[str, object]:
+        return {
+            "accessToken": "not-a-jwt",
+            "idToken": "also-not-a-jwt",
+            "refreshToken": None,
+            "expiresIn": 3600,
+        }
+
+    monkeypatch.setattr(mock_cognito, "refresh_tokens", malformed_refresh)
+
+    with pytest.raises(UnauthorizedException, match="missing subject"):
+        await service.refresh_session("mock_refresh_anything")

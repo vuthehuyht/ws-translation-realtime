@@ -1,6 +1,7 @@
 import type { LoginTokens, UserProfile } from "./auth-api";
 
 export const AUTH_SESSION_STORAGE_KEY = "ws_translation_auth_session";
+export const AUTH_REMEMBER_ME_KEY = "ws_translation_remember_me";
 
 export interface AuthSession {
   tokens: LoginTokens;
@@ -8,12 +9,18 @@ export interface AuthSession {
   expiresAt?: number;
 }
 
+function omitRefreshToken(tokens: LoginTokens): LoginTokens {
+  const copy: LoginTokens = { ...tokens };
+  delete copy.refreshToken;
+  return copy;
+}
+
 /**
- * Persist authenticated tokens and user profile in localStorage (Remember Me)
+ * Persist authenticated access/ID tokens and user profile in localStorage (Remember Me)
  * or sessionStorage (current browser tab session only).
  *
- * TODO(TASK-AUTH-07/TASK-AUTH-08): Move the 30-day refreshToken out of Web Storage
- * into an HttpOnly; Secure; SameSite=Lax cookie before production deployment.
+ * The 30-day refreshToken is stored exclusively in an HttpOnly cookie by the backend
+ * and is explicitly stripped before serializing into Web Storage.
  */
 export function saveAuthSession(
   session: AuthSession,
@@ -25,12 +32,17 @@ export function saveAuthSession(
 
   const expiresInSeconds =
     session.tokens.expiresIn > 0 ? session.tokens.expiresIn : 3600;
+  // Strip refreshToken from Web Storage because the browser holds it in an HttpOnly cookie.
+  const safeTokens = omitRefreshToken(session.tokens);
+
   const sessionWithExpiry: AuthSession = {
     ...session,
+    tokens: safeTokens,
     expiresAt: session.expiresAt ?? Date.now() + expiresInSeconds * 1000,
   };
 
   const serialized = JSON.stringify(sessionWithExpiry);
+  window.localStorage.setItem(AUTH_REMEMBER_ME_KEY, rememberMe ? "1" : "0");
   if (rememberMe) {
     window.localStorage.setItem(AUTH_SESSION_STORAGE_KEY, serialized);
     window.sessionStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
@@ -38,6 +50,14 @@ export function saveAuthSession(
     window.sessionStorage.setItem(AUTH_SESSION_STORAGE_KEY, serialized);
     window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
   }
+}
+
+export function getRememberMePreference(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(AUTH_REMEMBER_ME_KEY) === "1";
 }
 
 export function getAuthSession(): AuthSession | null {
@@ -63,22 +83,27 @@ export function getAuthSession(): AuthSession | null {
       !hasValidExpiry ||
       Date.now() >= (parsed.expiresAt as number)
     ) {
-      // Drop malformed, un-expirable, or expired sessions to prevent stale auth state.
-      clearAuthSession();
+      // Preserve rememberMe preference so silent refresh writes back to the original storage.
+      clearAuthSession({ preserveRememberMe: true });
       return null;
     }
     return parsed as AuthSession;
   } catch {
-    clearAuthSession();
+    clearAuthSession({ preserveRememberMe: true });
     return null;
   }
 }
 
-export function clearAuthSession(): void {
+export function clearAuthSession(options?: {
+  preserveRememberMe?: boolean;
+}): void {
   if (typeof window === "undefined") {
     return;
   }
 
   window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
   window.sessionStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+  if (!options?.preserveRememberMe) {
+    window.localStorage.removeItem(AUTH_REMEMBER_ME_KEY);
+  }
 }

@@ -36,11 +36,14 @@ class ConfirmResponse(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    """Authentication tokens returned by Cognito."""
+    """Public JWT tokens returned to the client.
+
+    The refresh token is deliberately absent: it travels only in an HttpOnly cookie so that
+    an XSS payload cannot read it from a JSON response body.
+    """
 
     access_token: str = Field(..., alias="accessToken")
     id_token: str = Field(..., alias="idToken")
-    refresh_token: str = Field(..., alias="refreshToken")
     expires_in: int = Field(default=3600, alias="expiresIn")
     token_type: str = Field(default="Bearer", alias="tokenType")
 
@@ -64,6 +67,13 @@ class UserProfileResponse(BaseModel):
 
 class LoginResponse(BaseModel):
     """Response on successful login including tokens and user metadata."""
+
+    tokens: TokenResponse
+    user: UserProfileResponse
+
+
+class RefreshResponse(BaseModel):
+    """Response returned upon successful silent token refresh."""
 
     tokens: TokenResponse
     user: UserProfileResponse
