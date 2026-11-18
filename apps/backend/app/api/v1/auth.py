@@ -2,10 +2,10 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, Body, Depends, Request, Response, status
 from fastapi.responses import JSONResponse
 
-from app.api.deps import get_auth_service
+from app.api.deps import AccessTokenContext, get_auth_service, get_logout_token_context
 from app.core.config import get_settings
 from app.core.exceptions import (
     ForbiddenException,
@@ -16,6 +16,7 @@ from app.core.exceptions import (
 from app.schemas.requests import (
     ConfirmRequest,
     LoginRequest,
+    LogoutRequest,
     RegisterRequest,
     ResendOtpRequest,
 )
@@ -148,6 +149,33 @@ async def login(
         remember_me=payload.remember_me,
     )
     return result.response
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Sign out this device or every device and revoke tokens",
+)
+async def logout(
+    request: Request,
+    response: Response,
+    context: Annotated[AccessTokenContext, Depends(get_logout_token_context)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    payload: Annotated[LogoutRequest | None, Body()] = None,
+) -> None:
+    """Revoke the refresh token (or all sessions with `global`) and clear the auth cookies."""
+    refresh_token = (request.cookies.get(REFRESH_COOKIE_NAME) or "").strip() or None
+    await auth_service.logout(
+        access_token=context.token,
+        subject=context.subject,
+        expires_at=context.expires_at,
+        refresh_token=refresh_token,
+        global_sign_out=bool(payload and payload.global_sign_out),
+        session_id=context.session_id,
+    )
+    # Cookies are cleared only after revocation succeeded; on a Cognito outage the error
+    # response keeps them so the client can retry.
+    _clear_refresh_cookies(response)
 
 
 @router.post(

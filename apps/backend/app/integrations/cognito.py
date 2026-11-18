@@ -22,6 +22,8 @@ from app.core.exceptions import (
     UnauthorizedException,
     ValidationException,
 )
+from app.core.security import create_access_token, decode_access_token
+from app.integrations.cognito_jwks import CognitoJwtVerifier
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +38,14 @@ class CognitoUserRecord:
     full_name: str
     is_confirmed: bool = False
     confirmation_code: str = "123456"
+
+
+@dataclass(frozen=True)
+class MockRefreshSession:
+    """Owner and session id (`origin_jti`) behind a mock refresh token."""
+
+    sub: str
+    origin_jti: str
 
 
 class CognitoClient:
@@ -61,6 +71,18 @@ class CognitoClient:
         """Refresh AccessToken and IdToken using Cognito REFRESH_TOKEN_AUTH."""
         raise NotImplementedError
 
+    async def revoke_token(self, refresh_token: str) -> None:
+        """Revoke a single refresh token (and the access tokens issued from it)."""
+        raise NotImplementedError
+
+    async def global_sign_out(self, access_token: str) -> None:
+        """Invalidate every refresh token of the access token's user on all devices."""
+        raise NotImplementedError
+
+    async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
+        """Verify an access token and return its claims; raise ValueError when invalid."""
+        raise NotImplementedError
+
     async def get_user_info(self, email: str) -> dict[str, str]:
         """Fetch user attributes (sub, name) from Cognito."""
         raise NotImplementedError
@@ -76,6 +98,8 @@ class MockCognitoClient(CognitoClient):
 
     def __init__(self) -> None:
         self.users: dict[str, CognitoUserRecord] = {}
+        # Active refresh tokens and their sessions so revocation can be simulated.
+        self.refresh_sessions: dict[str, MockRefreshSession] = {}
 
     async def sign_up(self, email: str, password: str, full_name: str) -> dict[str, Any]:
         if email in self.users:
@@ -123,48 +147,69 @@ class MockCognitoClient(CognitoClient):
         if not user.is_confirmed:
             raise UnauthorizedException("User is not confirmed. Please enter OTP")
 
-        from app.core.security import create_access_token
-
-        access_token = create_access_token(
-            subject=user.sub,
-            claims={"email": user.email, "name": user.full_name},
-        )
-        id_token = create_access_token(
-            subject=user.sub,
-            claims={"email": user.email, "name": user.full_name, "token_use": "id"},
-        )
+        refresh_token = f"mock_refresh_{uuid.uuid4().hex}"
+        session = MockRefreshSession(sub=user.sub, origin_jti=uuid.uuid4().hex)
+        self.refresh_sessions[refresh_token] = session
+        access_token, id_token = self._issue_tokens(user, session)
         return {
             "accessToken": access_token,
             "idToken": id_token,
-            "refreshToken": f"mock_refresh_{user.sub}",
+            "refreshToken": refresh_token,
             "expiresIn": 3600,
         }
 
-    async def refresh_tokens(self, refresh_token: str) -> dict[str, Any]:
-        if not refresh_token.startswith("mock_refresh_"):
-            raise UnauthorizedException("Invalid or expired refresh token")
-
-        target_sub = refresh_token.removeprefix("mock_refresh_")
-        user = next((u for u in self.users.values() if u.sub == target_sub), None)
-        if not user or not user.is_confirmed:
-            raise UnauthorizedException("Invalid or expired refresh token")
-
-        from app.core.security import create_access_token
-
+    @staticmethod
+    def _issue_tokens(user: CognitoUserRecord, session: MockRefreshSession) -> tuple[str, str]:
+        """Issue access/ID tokens that, like real Cognito, carry a unique jti and origin_jti."""
+        common = {
+            "email": user.email,
+            "name": user.full_name,
+            "origin_jti": session.origin_jti,
+        }
         access_token = create_access_token(
-            subject=user.sub,
-            claims={"email": user.email, "name": user.full_name},
+            subject=user.sub, claims={**common, "jti": uuid.uuid4().hex}
         )
         id_token = create_access_token(
             subject=user.sub,
-            claims={"email": user.email, "name": user.full_name, "token_use": "id"},
+            claims={**common, "jti": uuid.uuid4().hex, "token_use": "id"},
         )
+        return access_token, id_token
+
+    async def refresh_tokens(self, refresh_token: str) -> dict[str, Any]:
+        session = self.refresh_sessions.get(refresh_token)
+        if session is None:
+            raise UnauthorizedException("Invalid or expired refresh token")
+
+        user = next((u for u in self.users.values() if u.sub == session.sub), None)
+        if not user or not user.is_confirmed:
+            raise UnauthorizedException("Invalid or expired refresh token")
+
+        access_token, id_token = self._issue_tokens(user, session)
         return {
             "accessToken": access_token,
             "idToken": id_token,
             "refreshToken": None,
             "expiresIn": 3600,
         }
+
+    async def revoke_token(self, refresh_token: str) -> None:
+        # Real Cognito rejects unknown or already revoked tokens; mirror that.
+        if self.refresh_sessions.pop(refresh_token, None) is None:
+            raise UnauthorizedException("Invalid or expired refresh token")
+
+    async def global_sign_out(self, access_token: str) -> None:
+        try:
+            subject = decode_access_token(access_token).get("sub")
+        except ValueError as e:
+            raise UnauthorizedException("Access token is invalid or expired") from e
+
+        for token, session in list(self.refresh_sessions.items()):
+            if session.sub == subject:
+                del self.refresh_sessions[token]
+
+    async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
+        # Offline mock tokens are HS256 JWTs signed with the local secret.
+        return decode_access_token(token, verify_exp=verify_exp)
 
     async def get_user_info(self, email: str) -> dict[str, str]:
         user = self.users.get(email)
@@ -184,10 +229,16 @@ class AwsCognitoClient(CognitoClient):
         aws_access_key_id: str | None = None,
         aws_secret_access_key: str | None = None,
         aws_session_token: str | None = None,
+        jwt_verifier: CognitoJwtVerifier | None = None,
     ) -> None:
         self.user_pool_id = user_pool_id
         self.client_id = client_id
         self.region = region
+        self.jwt_verifier = jwt_verifier or CognitoJwtVerifier(
+            region=region,
+            user_pool_id=user_pool_id,
+            client_id=client_id,
+        )
         session_kwargs: dict[str, str] = {"region_name": region}
         if aws_access_key_id and aws_secret_access_key:
             session_kwargs["aws_access_key_id"] = aws_access_key_id
@@ -375,6 +426,48 @@ class AwsCognitoClient(CognitoClient):
                     ) from e
                 logger.error("Cognito refresh_tokens ClientError: %s - %s", error_code, error_msg)
                 raise BadGatewayException(f"Authentication provider error: {error_msg}") from e
+
+    async def revoke_token(self, refresh_token: str) -> None:
+        """Call Cognito RevokeToken for the given refresh token."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                await client.revoke_token(Token=refresh_token, ClientId=self.client_id)
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                # Only NotAuthorizedException proves the token is already dead. Other errors
+                # (e.g. InvalidParameterException from a misconfigured client or token type)
+                # must not look like a successful revocation.
+                if error_code == "NotAuthorizedException":
+                    raise UnauthorizedException("Invalid or expired refresh token") from e
+                if error_code in ("LimitExceededException", "TooManyRequestsException"):
+                    raise TooManyRequestsException(
+                        "Too many sign-out requests. Please try again later."
+                    ) from e
+                logger.error("Cognito revoke_token ClientError: %s - %s", error_code, error_msg)
+                # Provider detail stays in the log; clients only get a generic message.
+                raise BadGatewayException("Authentication provider error") from e
+
+    async def global_sign_out(self, access_token: str) -> None:
+        """Call Cognito GlobalSignOut to invalidate all refresh tokens of the user."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                await client.global_sign_out(AccessToken=access_token)
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code == "NotAuthorizedException":
+                    raise UnauthorizedException("Access token is invalid or expired") from e
+                if error_code in ("LimitExceededException", "TooManyRequestsException"):
+                    raise TooManyRequestsException(
+                        "Too many sign-out requests. Please try again later."
+                    ) from e
+                logger.error("Cognito global_sign_out ClientError: %s - %s", error_code, error_msg)
+                raise BadGatewayException("Authentication provider error") from e
+
+    async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
+        """Verify a Cognito RS256 access token against the user pool's JWKS."""
+        return await self.jwt_verifier.verify_access_token(token, verify_exp=verify_exp)
 
     @staticmethod
     def _extract_user_info(response: dict[str, Any], email: str) -> dict[str, str]:

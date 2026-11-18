@@ -125,6 +125,22 @@ class BadGatewayException(AppException):
         )
 
 
+class ServiceUnavailableException(AppException):
+    """A required internal dependency is temporarily unavailable (HTTP 503)."""
+
+    def __init__(
+        self,
+        message: str = "Service temporarily unavailable",
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        super().__init__(
+            message=message,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            error_code="SERVICE_UNAVAILABLE",
+            details=details,
+        )
+
+
 class TooManyRequestsException(AppException):
     """Rate limit exceeded (HTTP 429)."""
 

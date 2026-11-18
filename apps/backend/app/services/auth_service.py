@@ -3,6 +3,7 @@
 Orchestrates Cognito integration with PostgreSQL User and Wallet repositories.
 """
 
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -14,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from app.core.exceptions import (
     ConflictException,
     ForbiddenException,
+    ServiceUnavailableException,
     TooManyRequestsException,
     UnauthorizedException,
 )
@@ -37,6 +39,7 @@ from app.schemas.responses import (
     TokenResponse,
     UserProfileResponse,
 )
+from app.services import token_blocklist
 
 WELCOME_BONUS_AMOUNT = Decimal("2.0000")
 RESEND_OTP_COOLDOWN_SECONDS = 60
@@ -270,6 +273,48 @@ class AuthService:
             default_target_langs=profile_data.default_target_langs if profile_data else [],
             timezone=profile_data.timezone if profile_data else "Asia/Ho_Chi_Minh",
         )
+
+    async def logout(
+        self,
+        *,
+        access_token: str,
+        subject: str,
+        expires_at: int | None,
+        refresh_token: str | None,
+        global_sign_out: bool,
+        session_id: str | None = None,
+    ) -> None:
+        """Revoke the session at Cognito, then block the access token locally.
+
+        Cognito goes first so a Cognito outage leaves the session intact and the client can
+        retry. An UnauthorizedException from Cognito means the token is already dead, which is
+        the desired end state, so the call stays idempotent.
+        """
+        if self.redis is None:
+            # Without the blocklist a 204 would claim a revocation that is not enforced.
+            raise ServiceUnavailableException("Session store is not configured")
+
+        if global_sign_out and expires_at is not None and expires_at <= int(time.time()):
+            # GlobalSignOut needs a live access token; the client must refresh and retry
+            # instead of us silently skipping the Cognito half of a global sign-out.
+            raise UnauthorizedException("Access token expired; refresh and retry global sign-out")
+
+        try:
+            if global_sign_out:
+                await self.cognito.global_sign_out(access_token)
+            elif refresh_token:
+                await self.cognito.revoke_token(refresh_token)
+        except UnauthorizedException:
+            pass
+
+        # Access tokens are validated locally, so Cognito revocation alone would not stop them.
+        if global_sign_out:
+            await token_blocklist.revoke_all_for_subject(self.redis, subject)
+        else:
+            await token_blocklist.revoke_access_token(self.redis, access_token, expires_at)
+            if session_id:
+                # Earlier unexpired access tokens of the same session must die with it.
+                await token_blocklist.revoke_session(self.redis, session_id)
 
     async def refresh_session(self, refresh_token: str) -> RefreshResult:
         """Refresh access and ID tokens via Cognito while enforcing account status."""

@@ -94,6 +94,32 @@ export function getAuthSession(): AuthSession | null {
   }
 }
 
+/**
+ * Read the stored session without validating or clearing it on expiry.
+ *
+ * Logout needs the stale access token of an expired session: the backend accepts it (signature
+ * only) so it can still revoke the refresh cookie.
+ */
+export function peekAuthSession(): AuthSession | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const raw =
+    window.sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY) ??
+    window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Partial<AuthSession>;
+    return parsed.tokens?.accessToken ? (parsed as AuthSession) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function clearAuthSession(options?: {
   preserveRememberMe?: boolean;
 }): void {

@@ -5,6 +5,7 @@ from httpx import AsyncClient
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.integrations.cognito import get_cognito_client
 from app.models.user import User
 
 
@@ -327,8 +328,6 @@ async def test_auth_api_session_cookie_without_remember_me_and_token_rotation(
     )
 
     # 2. Refresh updates ws_refresh_token cookie when Cognito rotates RefreshToken
-    from app.integrations.cognito import get_cognito_client
-
     cognito = get_cognito_client()
     orig_refresh = cognito.refresh_tokens
 
@@ -352,8 +351,6 @@ async def test_auth_api_refresh_rejects_token_without_subject_and_clears_cookies
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from app.integrations.cognito import get_cognito_client
-
     async def malformed_refresh(_token: str) -> dict[str, object]:
         return {
             "accessToken": "not-a-jwt",

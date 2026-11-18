@@ -109,6 +109,23 @@ export function loginHost(
   });
 }
 
+export interface LogoutHostOptions {
+  /** Access token to authorize the request; may be expired (the backend checks signature only). */
+  accessToken: string;
+  /** Sign out every device instead of only the current one. */
+  global?: boolean;
+}
+
+export function logoutHost(options: LogoutHostOptions): Promise<void> {
+  return apiRequest<void>("/api/v1/auth/logout", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${options.accessToken}` },
+    body: JSON.stringify({ global: options.global ?? false }),
+    // Refreshing here would hide whether the server-side session was really revoked.
+    skipAuthRefresh: true,
+  });
+}
+
 export function refreshHostSession(): Promise<RefreshSessionResponse> {
   return apiRequest<RefreshSessionResponse>("/api/v1/auth/refresh", {
     method: "POST",
