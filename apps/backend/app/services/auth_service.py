@@ -17,12 +17,14 @@ from redis.exceptions import RedisError
 from sqlalchemy.exc import IntegrityError
 
 from app.core.exceptions import (
+    BadGatewayException,
     ConflictException,
     ForbiddenException,
     NotFoundException,
     ServiceUnavailableException,
     TooManyRequestsException,
     UnauthorizedException,
+    ValidationException,
 )
 from app.integrations.cognito import CognitoClient, get_cognito_client
 from app.models.user import User, UserProfile
@@ -35,6 +37,7 @@ from app.schemas.requests import (
     LoginRequest,
     RegisterRequest,
     ResendOtpRequest,
+    ResetPasswordRequest,
 )
 from app.schemas.responses import (
     ConfirmResponse,
@@ -43,6 +46,7 @@ from app.schemas.responses import (
     RefreshResponse,
     RegisterResponse,
     ResendOtpResponse,
+    ResetPasswordResponse,
     TokenResponse,
     UserProfileResponse,
 )
@@ -52,6 +56,8 @@ WELCOME_BONUS_AMOUNT = Decimal("2.0000")
 RESEND_OTP_COOLDOWN_SECONDS = 60
 FORGOT_PASSWORD_MAX_ATTEMPTS = 3
 FORGOT_PASSWORD_WINDOW_SECONDS = 900
+RESET_PASSWORD_MAX_FAILED_ATTEMPTS = 5
+RESET_PASSWORD_WINDOW_SECONDS = 900
 logger = logging.getLogger(__name__)
 
 
@@ -319,6 +325,87 @@ class AuthService:
 
         return ForgotPasswordResponse(email=normalized_email)
 
+    async def reset_password(self, request: ResetPasswordRequest) -> ResetPasswordResponse:
+        """Confirm password reset with OTP and revoke all existing sessions across devices."""
+        normalized_email = request.email.strip().lower()
+        if self.redis is None:
+            raise ServiceUnavailableException("Rate limit store is temporarily unavailable")
+
+        # A 6-digit OTP has only 10^6 possibilities, so cap wrong guesses per email on top of
+        # Cognito's own throttling.
+        failure_key = f"email:{normalized_email}:reset_password_failures"
+        await self._ensure_reset_attempts_allowed(failure_key)
+
+        # Block suspended or non-active accounts with the same error as an invalid OTP
+        # to avoid revealing account status.
+        user = await self.user_repo.get_by_email(normalized_email)
+        if user is not None and user.status != "ACTIVE":
+            raise ValidationException("Invalid or expired reset code")
+
+        try:
+            await self.cognito.confirm_forgot_password(
+                email=normalized_email,
+                confirmation_code=request.otp_code,
+                new_password=request.new_password,
+            )
+        except ValidationException:
+            await self._record_reset_failure(failure_key)
+            raise
+
+        try:
+            await self.redis.delete(failure_key)
+        except RedisError as exc:
+            logger.warning("Failed to clear reset_password failure counter: %s", exc)
+
+        # Password is now updated in Cognito; revoke old sessions best-effort so a transient
+        # revocation failure never misleads the caller into thinking the reset failed.
+        # Only swallow the known provider error, and log at error level because old sessions
+        # may still be alive.
+        try:
+            await self.cognito.admin_global_sign_out(normalized_email)
+        except BadGatewayException as exc:
+            logger.error(
+                "Post-reset Cognito global sign-out failed; refresh tokens may remain valid: %s",
+                exc,
+            )
+
+        if user is not None:
+            try:
+                await token_blocklist.revoke_all_for_subject(self.redis, user.id)
+            except RedisError as exc:
+                logger.error("Post-reset Redis token revocation failed: %s", exc)
+
+        return ResetPasswordResponse()
+
+    async def _ensure_reset_attempts_allowed(self, failure_key: str) -> None:
+        """Reject further OTP guesses once the per-email failure budget is exhausted."""
+        assert self.redis is not None
+        try:
+            raw_count = await self.redis.get(failure_key)
+            if raw_count is not None and int(raw_count) >= RESET_PASSWORD_MAX_FAILED_ATTEMPTS:
+                ttl = await self.redis.ttl(failure_key)
+                retry_after = ttl if ttl > 0 else RESET_PASSWORD_WINDOW_SECONDS
+                raise TooManyRequestsException(
+                    "Too many failed password reset attempts. "
+                    f"Please wait {retry_after} seconds before trying again.",
+                    details={"retryAfter": retry_after},
+                )
+        except RedisError as exc:
+            raise ServiceUnavailableException(
+                "Rate limit store is temporarily unavailable"
+            ) from exc
+
+    async def _record_reset_failure(self, failure_key: str) -> None:
+        """Count a failed OTP confirmation; window starts at the first failure."""
+        assert self.redis is not None
+        try:
+            count = await self.redis.incr(failure_key)
+            if int(count) == 1:
+                await self.redis.expire(failure_key, RESET_PASSWORD_WINDOW_SECONDS)
+        except RedisError as exc:
+            # Never mask the original validation error when Redis is down; log only.
+            logger.warning("Failed to record reset_password failure: %s", exc)
+
     @staticmethod
     def _ensure_active(user: User) -> None:
         """Default-deny: only ACTIVE accounts may obtain or renew a session."""
@@ -338,7 +425,7 @@ class AuthService:
         )
 
         # Retrieve user and profile from database
-        user = await self.user_repo.get_by_email(normalized_email)
+        user = await self.user_repo.get_by_email(normalized_email, include_profile=True)
         if not user:
             raise UnauthorizedException("Incorrect username or password")
         self._ensure_active(user)
@@ -439,7 +526,7 @@ class AuthService:
         if not sub:
             raise UnauthorizedException("Refreshed token missing subject identifier")
 
-        user = await self.user_repo.get_by_id(sub)
+        user = await self.user_repo.get_by_id(sub, include_profile=True)
         if not user:
             raise UnauthorizedException("Session is invalid")
         self._ensure_active(user)

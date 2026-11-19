@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.user import User, UserProfile
 from app.repositories.base import BaseRepository
@@ -18,9 +19,29 @@ class UserRepository(BaseRepository[User]):
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(session=session, model_cls=User)
 
-    async def get_by_email(self, email: str) -> User | None:
-        """Find a user by normalized lowercase email address."""
+    async def get_by_id(
+        self,
+        entity_id: Any,
+        *,
+        include_profile: bool = False,
+    ) -> User | None:
+        """Fetch a user by primary key, optionally eager-loading UserProfile."""
+        stmt = select(User).where(User.id == entity_id)
+        if include_profile:
+            stmt = stmt.options(selectinload(User.profile))
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def get_by_email(
+        self,
+        email: str,
+        *,
+        include_profile: bool = False,
+    ) -> User | None:
+        """Find a user by normalized lowercase email, optionally eager-loading UserProfile."""
         stmt = select(User).where(User.email == email.strip().lower())
+        if include_profile:
+            stmt = stmt.options(selectinload(User.profile))
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 

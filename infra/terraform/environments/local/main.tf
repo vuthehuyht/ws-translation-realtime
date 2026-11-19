@@ -139,6 +139,7 @@ resource "aws_iam_user_policy" "local_dev_policy" {
           "cognito-idp:ConfirmSignUp",
           "cognito-idp:ForgotPassword",
           "cognito-idp:ConfirmForgotPassword",
+          "cognito-idp:AdminUserGlobalSignOut",
           "cognito-idp:GetUser"
         ]
         Resource = [module.cognito.user_pool_arn]

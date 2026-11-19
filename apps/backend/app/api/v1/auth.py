@@ -19,6 +19,7 @@ from app.schemas.requests import (
     LogoutRequest,
     RegisterRequest,
     ResendOtpRequest,
+    ResetPasswordRequest,
 )
 from app.schemas.responses import (
     ConfirmResponse,
@@ -27,6 +28,7 @@ from app.schemas.responses import (
     RefreshResponse,
     RegisterResponse,
     ResendOtpResponse,
+    ResetPasswordResponse,
 )
 from app.services.auth_service import AuthService
 
@@ -151,6 +153,24 @@ async def forgot_password(
     """Trigger Cognito ForgotPassword OTP delivery with a 3-per-15-minute Redis rate limit."""
     result = await auth_service.forgot_password(payload)
     _set_no_store_headers(response)
+    return result
+
+
+@router.post(
+    "/reset-password",
+    response_model=ResetPasswordResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Confirm password reset with 6-digit OTP and set a new password",
+)
+async def reset_password(
+    payload: ResetPasswordRequest,
+    response: Response,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> ResetPasswordResponse:
+    """Confirm Cognito password reset, revoke all active sessions, and clear auth cookies."""
+    result = await auth_service.reset_password(payload)
+    _set_no_store_headers(response)
+    _clear_refresh_cookies(response)
     return result
 
 

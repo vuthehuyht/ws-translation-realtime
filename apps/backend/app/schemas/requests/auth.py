@@ -8,6 +8,19 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 EMAIL_REGEX = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
 
 
+def _validate_password_complexity(v: str) -> str:
+    """Validate password complexity; minimum length is enforced by Field(min_length=8)."""
+    if not re.search(r"[A-Z]", v):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", v):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"[0-9]", v):
+        raise ValueError("Password must contain at least one number")
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/]', v):
+        raise ValueError("Password must contain at least one special character")
+    return v
+
+
 class _EmailRequestBase(BaseModel):
     """Shared base model normalizing email before regex validation."""
 
@@ -36,17 +49,7 @@ class RegisterRequest(_EmailRequestBase):
     @classmethod
     def validate_password_complexity(cls, v: str) -> str:
         """Validate password minimum complexity: uppercase, lowercase, digit, special char."""
-        if len(v) < 8:
-            raise ValueError("Password must be at least 8 characters long")
-        if not re.search(r"[A-Z]", v):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not re.search(r"[a-z]", v):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not re.search(r"[0-9]", v):
-            raise ValueError("Password must contain at least one number")
-        if not re.search(r'[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/]', v):
-            raise ValueError("Password must contain at least one special character")
-        return v
+        return _validate_password_complexity(v)
 
 
 class ConfirmRequest(_EmailRequestBase):
@@ -92,4 +95,34 @@ class ForgotPasswordRequest(_EmailRequestBase):
     """Payload to request a 6-digit password reset OTP."""
 
     email: str = Field(..., pattern=EMAIL_REGEX)
+
+
+class ResetPasswordRequest(_EmailRequestBase):
+    """Payload to confirm a password reset using a 6-digit OTP and new password."""
+
+    email: str = Field(..., pattern=EMAIL_REGEX)
+    otp_code: str = Field(
+        ...,
+        min_length=6,
+        max_length=6,
+        pattern=r"^\d{6}$",
+        validation_alias=AliasChoices(
+            "otpCode", "otp_code", "confirmationCode", "confirmation_code"
+        ),
+    )
+    new_password: str = Field(
+        ...,
+        min_length=8,
+        max_length=128,
+        validation_alias=AliasChoices("newPassword", "new_password"),
+        description="New password 8-128 characters",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password_complexity(cls, v: str) -> str:
+        """Enforce the same password complexity policy as registration."""
+        return _validate_password_complexity(v)
 

@@ -78,6 +78,28 @@ export function forgotPassword(
   return apiRequest<ForgotPasswordResponse>("/api/v1/auth/forgot-password", {
     method: "POST",
     body: JSON.stringify(payload),
+    skipAuthRefresh: true,
+  });
+}
+
+export interface ResetPasswordPayload {
+  email: string;
+  otpCode: string;
+  newPassword: string;
+}
+
+export interface ResetPasswordResponse {
+  status: string;
+  message: string;
+}
+
+export function resetPassword(
+  payload: ResetPasswordPayload
+): Promise<ResetPasswordResponse> {
+  return apiRequest<ResetPasswordResponse>("/api/v1/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    skipAuthRefresh: true,
   });
 }
 

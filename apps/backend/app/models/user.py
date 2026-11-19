@@ -28,44 +28,53 @@ class User(Base, TimestampMixin):
     role: Mapped[str] = mapped_column(String(32), default="HOST", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="ACTIVE", nullable=False)
 
-    # Relationships
+    # Relationships use lazy="raise" so async queries explicitly opt in via
+    # selectinload() instead of firing 6 extra SELECTs on every User lookup.
+    # passive_deletes=True keeps session.delete(user) from loading these collections (which
+    # would raise under lazy="raise"); child rows are removed by the DB's ON DELETE CASCADE.
     profile: Mapped["UserProfile"] = relationship(
         "UserProfile",
         back_populates="user",
         uselist=False,
-        lazy="selectin",
+        lazy="raise",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     wallet: Mapped["Wallet"] = relationship(
         "Wallet",
         back_populates="host",
         uselist=False,
-        lazy="selectin",
+        lazy="raise",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     rooms: Mapped[list["Room"]] = relationship(
         "Room",
         back_populates="host",
-        lazy="selectin",
+        lazy="raise",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     vocabularies: Mapped[list["CustomVocabulary"]] = relationship(
         "CustomVocabulary",
         back_populates="host",
-        lazy="selectin",
+        lazy="raise",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     payment_transactions: Mapped[list["PaymentTransaction"]] = relationship(
         "PaymentTransaction",
         back_populates="host",
-        lazy="selectin",
+        lazy="raise",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
     promo_redemptions: Mapped[list["PromoRedemption"]] = relationship(
         "PromoRedemption",
         back_populates="user",
-        lazy="selectin",
+        lazy="raise",
         cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 
@@ -102,4 +111,4 @@ class UserProfile(Base, TimestampMixin):
     preferences: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
     # Relationships
-    user: Mapped["User"] = relationship("User", back_populates="profile", lazy="selectin")
+    user: Mapped["User"] = relationship("User", back_populates="profile", lazy="raise")
