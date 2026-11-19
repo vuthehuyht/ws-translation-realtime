@@ -506,3 +506,73 @@ async def test_aws_cognito_forgot_password_maps_client_errors(
         await cognito.forgot_password("host@example.com")
 
     assert "sensitive detail" not in str(exc_info.value)
+
+
+@pytest.mark.parametrize(
+    ("error_code", "expected_exc"),
+    [
+        ("CodeMismatchException", ValidationException),
+        ("ExpiredCodeException", ValidationException),
+        ("UserNotFoundException", ValidationException),
+        ("NotAuthorizedException", ValidationException),
+        ("InvalidPasswordException", ValidationException),
+        ("LimitExceededException", TooManyRequestsException),
+        ("TooManyRequestsException", TooManyRequestsException),
+        ("InternalErrorException", BadGatewayException),
+    ],
+)
+async def test_aws_cognito_confirm_forgot_password_maps_client_errors(
+    error_code: str,
+    expected_exc: type[Exception],
+) -> None:
+    mock_boto = AsyncMock()
+    mock_boto.confirm_forgot_password.side_effect = _make_client_error(
+        error_code, "Cognito reset detail"
+    )
+    cognito = _make_aws_cognito_with_mock_client(mock_boto)
+
+    with pytest.raises(expected_exc):
+        await cognito.confirm_forgot_password("host@example.com", "123456", "NewPassword2@")
+
+
+async def test_aws_cognito_admin_global_sign_out_calls_api_and_ignores_missing_user() -> None:
+    mock_boto = AsyncMock()
+    cognito = _make_aws_cognito_with_mock_client(mock_boto)
+
+    await cognito.admin_global_sign_out("host@example.com")
+    mock_boto.admin_user_global_sign_out.assert_awaited_once_with(
+        UserPoolId="ap-southeast-1_testpool",
+        Username="host@example.com",
+    )
+
+    mock_boto.admin_user_global_sign_out.side_effect = _make_client_error(
+        "UserNotFoundException", "User does not exist"
+    )
+    await cognito.admin_global_sign_out("missing@example.com")
+
+
+@pytest.mark.parametrize("error_code", ["InvalidPasswordException", "InvalidParameterException"])
+async def test_aws_cognito_confirm_forgot_password_hides_raw_provider_message(
+    error_code: str,
+) -> None:
+    mock_boto = AsyncMock()
+    mock_boto.confirm_forgot_password.side_effect = _make_client_error(
+        error_code, "raw provider detail"
+    )
+    cognito = _make_aws_cognito_with_mock_client(mock_boto)
+
+    with pytest.raises(ValidationException) as exc_info:
+        await cognito.confirm_forgot_password("host@example.com", "123456", "NewPassword2@")
+
+    assert "raw provider detail" not in str(exc_info.value)
+
+
+async def test_aws_cognito_admin_global_sign_out_raises_bad_gateway_on_access_denied() -> None:
+    mock_boto = AsyncMock()
+    mock_boto.admin_user_global_sign_out.side_effect = _make_client_error(
+        "AccessDeniedException", "not authorized to perform"
+    )
+    cognito = _make_aws_cognito_with_mock_client(mock_boto)
+
+    with pytest.raises(BadGatewayException):
+        await cognito.admin_global_sign_out("host@example.com")

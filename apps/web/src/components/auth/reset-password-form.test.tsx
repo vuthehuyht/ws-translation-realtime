@@ -102,4 +102,42 @@ describe("ResetPasswordForm component", () => {
       });
     });
   });
+
+  it("shows error when password lacks complexity requirements", async () => {
+    render(<ResetPasswordForm />);
+    const firstOtpInput = screen.getByLabelText("Mã OTP số 1");
+    fireEvent.paste(firstOtpInput, {
+      clipboardData: { getData: () => "123456" },
+    });
+
+    fireEvent.change(screen.getByLabelText(/^Mật khẩu mới/i), {
+      target: { value: "weakpassword123" },
+    });
+    fireEvent.change(screen.getByLabelText(/Xác nhận lại mật khẩu mới/i), {
+      target: { value: "weakpassword123" },
+    });
+
+    fireEvent.click(
+      screen.getByRole("button", { name: /Lưu Mật khẩu & Đăng nhập ngay/i })
+    );
+
+    expect(
+      await screen.findByText(/chữ hoa, chữ thường, chữ số và ký tự đặc biệt/i)
+    ).toBeInTheDocument();
+  });
+
+  it("renders serverError and infoBanner when provided", () => {
+    render(
+      <ResetPasswordForm
+        serverError="Mã OTP không đúng hoặc đã hết hạn."
+        infoBanner="Mã OTP mới đã được gửi."
+      />
+    );
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Mã OTP không đúng hoặc đã hết hạn."
+    );
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Mã OTP mới đã được gửi."
+    );
+  });
 });

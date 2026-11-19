@@ -12,14 +12,18 @@ export interface ResetPasswordFormData {
 }
 
 interface ResetPasswordFormProps {
-  onSubmitSuccess?: (data: ResetPasswordFormData) => void;
-  onResendOtp?: () => void;
+  onSubmitSuccess?: (data: ResetPasswordFormData) => void | Promise<void>;
+  onResendOtp?: () => void | number | Promise<void | number>;
+  serverError?: string | null;
+  infoBanner?: string | null;
   className?: string;
 }
 
 export function ResetPasswordForm({
   onSubmitSuccess,
   onResendOtp,
+  serverError,
+  infoBanner,
   className,
 }: ResetPasswordFormProps) {
   const [otp, setOtp] = useState("");
@@ -28,9 +32,10 @@ export function ResetPasswordForm({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // Resend countdown timer (starts at 45s)
-  const [countdown, setCountdown] = useState(45);
+  // Resend countdown timer (starts at 60s)
+  const [countdown, setCountdown] = useState(60);
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
 
   const [errors, setErrors] = useState<{
     otp?: string;
@@ -46,11 +51,15 @@ export function ResetPasswordForm({
     return () => clearInterval(interval);
   }, [countdown]);
 
-  const handleResend = () => {
-    if (countdown > 0) return;
-    setCountdown(45);
-    if (onResendOtp) {
-      onResendOtp();
+  const handleResend = async () => {
+    if (countdown > 0 || isResending) return;
+    setIsResending(true);
+    try {
+      const nextCooldown = onResendOtp ? await onResendOtp() : undefined;
+      // 0 means the send failed (not a 429), so keep resend enabled; undefined keeps the 60s default.
+      setCountdown(typeof nextCooldown === "number" ? Math.max(0, Math.ceil(nextCooldown)) : 60);
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -65,6 +74,14 @@ export function ResetPasswordForm({
       newErrors.password = "Vui lòng nhập mật khẩu mới";
     } else if (password.length < 8) {
       newErrors.password = "Mật khẩu phải có ít nhất 8 ký tự";
+    } else if (
+      !/[A-Z]/.test(password) ||
+      !/[a-z]/.test(password) ||
+      !/[0-9]/.test(password) ||
+      !/[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/]/.test(password)
+    ) {
+      newErrors.password =
+        "Mật khẩu phải gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt";
     }
 
     if (!confirmPassword) {
@@ -80,7 +97,7 @@ export function ResetPasswordForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validate()) {
+    if (isLoading || !validate()) {
       return;
     }
 
@@ -88,7 +105,7 @@ export function ResetPasswordForm({
 
     try {
       if (onSubmitSuccess) {
-        onSubmitSuccess({
+        await onSubmitSuccess({
           otp,
           password,
         });
@@ -108,6 +125,24 @@ export function ResetPasswordForm({
           Nhập mã OTP 6 số và thiết lập mật khẩu bảo vệ mới
         </p>
       </div>
+
+      {infoBanner && (
+        <div
+          role="status"
+          className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
+        >
+          {infoBanner}
+        </div>
+      )}
+
+      {serverError && (
+        <div
+          role="alert"
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-xs font-medium text-destructive"
+        >
+          {serverError}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-5" noValidate>
         {/* OTP Input Field */}

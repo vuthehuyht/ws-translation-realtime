@@ -7,6 +7,7 @@ from app.schemas.requests.auth import (
     LogoutRequest,
     RegisterRequest,
     ResendOtpRequest,
+    ResetPasswordRequest,
 )
 
 __all__ = [
@@ -16,4 +17,5 @@ __all__ = [
     "LogoutRequest",
     "RegisterRequest",
     "ResendOtpRequest",
+    "ResetPasswordRequest",
 ]

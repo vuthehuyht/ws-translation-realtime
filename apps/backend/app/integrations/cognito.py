@@ -68,6 +68,19 @@ class CognitoClient:
         """Initiate password reset OTP delivery via Cognito ForgotPassword."""
         raise NotImplementedError
 
+    async def confirm_forgot_password(
+        self,
+        email: str,
+        confirmation_code: str,
+        new_password: str,
+    ) -> None:
+        """Confirm a password reset with OTP code and set a new password."""
+        raise NotImplementedError
+
+    async def admin_global_sign_out(self, email: str) -> None:
+        """Invalidate all Cognito sessions for a user by username without an access token."""
+        raise NotImplementedError
+
     async def authenticate(self, email: str, password: str) -> dict[str, Any]:
         """Authenticate user credentials."""
         raise NotImplementedError
@@ -152,6 +165,33 @@ class MockCognitoClient(CognitoClient):
         user.reset_code = "123456"
         logger.info("Mock Cognito forgot_password (sub=%s)", user.sub)
         return {"codeDeliveryDetails": {"Destination": email, "DeliveryMedium": "EMAIL"}}
+
+    async def confirm_forgot_password(
+        self,
+        email: str,
+        confirmation_code: str,
+        new_password: str,
+    ) -> None:
+        user = self.users.get(email)
+        if (
+            not user
+            or not user.is_confirmed
+            or not user.reset_code
+            or confirmation_code != user.reset_code
+        ):
+            raise ValidationException("Invalid or expired reset code")
+        user.password = new_password
+        user.reset_code = None
+        logger.info("Mock Cognito confirm_forgot_password (sub=%s)", user.sub)
+
+    async def admin_global_sign_out(self, email: str) -> None:
+        user = self.users.get(email)
+        if not user:
+            return
+        for token, session in list(self.refresh_sessions.items()):
+            if session.sub == user.sub:
+                del self.refresh_sessions[token]
+        logger.info("Mock Cognito admin_global_sign_out (sub=%s)", user.sub)
 
     async def authenticate(self, email: str, password: str) -> dict[str, Any]:
         user = self.users.get(email)
@@ -367,6 +407,67 @@ class AwsCognitoClient(CognitoClient):
                     ) from e
                 logger.error(
                     "Cognito forgot_password ClientError: %s - %s",
+                    error_code,
+                    error_msg,
+                )
+                raise BadGatewayException("Authentication provider error") from e
+
+    async def confirm_forgot_password(
+        self,
+        email: str,
+        confirmation_code: str,
+        new_password: str,
+    ) -> None:
+        """Call AWS Cognito ConfirmForgotPassword API with OTP and new password."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                await client.confirm_forgot_password(
+                    ClientId=self.client_id,
+                    Username=email,
+                    ConfirmationCode=confirmation_code,
+                    Password=new_password,
+                )
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code in (
+                    "CodeMismatchException",
+                    "ExpiredCodeException",
+                    "UserNotFoundException",
+                    "NotAuthorizedException",
+                ):
+                    # Uniform error blocks account enumeration while signaling invalid/expired OTP.
+                    raise ValidationException("Invalid or expired reset code") from e
+                if error_code == "InvalidPasswordException":
+                    raise ValidationException("Password does not meet the security policy") from e
+                if error_code == "InvalidParameterException":
+                    raise ValidationException("Invalid password reset request") from e
+                if error_code in ("LimitExceededException", "TooManyRequestsException"):
+                    raise TooManyRequestsException(
+                        "Too many password reset attempts. Please try again later."
+                    ) from e
+                logger.error(
+                    "Cognito confirm_forgot_password ClientError: %s - %s",
+                    error_code,
+                    error_msg,
+                )
+                raise BadGatewayException("Authentication provider error") from e
+
+    async def admin_global_sign_out(self, email: str) -> None:
+        """Call Cognito AdminUserGlobalSignOut to revoke all refresh tokens for the user."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                await client.admin_user_global_sign_out(
+                    UserPoolId=self.user_pool_id,
+                    Username=email,
+                )
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code == "UserNotFoundException":
+                    return
+                logger.warning(
+                    "Cognito admin_user_global_sign_out ClientError: %s - %s",
                     error_code,
                     error_msg,
                 )

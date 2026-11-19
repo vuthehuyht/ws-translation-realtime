@@ -16,10 +16,13 @@ function LoginPageContent() {
   const [unconfirmedEmail, setUnconfirmedEmail] = useState<string | null>(null);
 
   const isVerified = searchParams.get("verified") === "1";
+  const isPasswordReset = searchParams.get("reset") === "success";
   const initialEmail = searchParams.get("email") ?? "";
   const infoBanner = isVerified
     ? "Tài khoản của bạn đã được xác thực thành công. Vui lòng đăng nhập để tiếp tục."
-    : null;
+    : isPasswordReset
+      ? "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập bằng mật khẩu mới."
+      : null;
 
   const handleLoginSuccess = async (data: LoginFormData) => {
     setServerError(null);

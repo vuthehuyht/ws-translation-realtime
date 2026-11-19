@@ -91,3 +91,10 @@ class ForgotPasswordResponse(BaseModel):
         "If an active account exists for this email, a password reset code has been sent."
     )
 
+
+class ResetPasswordResponse(BaseModel):
+    """Response returned after confirming a password reset."""
+
+    status: str = "PASSWORD_RESET"
+    message: str = "Password has been reset successfully. Please sign in with your new password."
+

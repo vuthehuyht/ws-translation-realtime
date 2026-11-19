@@ -89,6 +89,11 @@ ws-translation-realtime/
 ### 4.4. Local Development & Offline Testing Strategy
 - Wrap all external AWS AI/Event services (`Transcribe`, `Translate`, `Polly`, `Bedrock`, `AppSync`) in `app/integrations/`.
 - When `ENV=local` or `ENV=test` (no real AWS credentials), automatically inject mock clients and use `fakeredis` + local PostgreSQL container so the entire E2E flow and `pytest` suite run 100% offline.
+- **Test File Organization Standard (Strict)**:
+  - **Backend (`apps/backend/tests/`)**: Mirror `app/` 1-to-1 by layer and module.
+    - `tests/api/test_<router>.py`: 1 file per router module (e.g., `test_auth.py`, `test_health.py`). Never create per-endpoint files like `test_auth_<action>.py`.
+    - `tests/unit/<layer>/test_<module>.py`: 1 file per module under `core/`, `integrations/`, `models/`, `repositories/`, `schemas/`, `services/`. Never mix unit tests for `integrations/` or `services/` into `tests/api/`.
+  - **Frontend (`apps/web/src/`)**: Co-locate tests next to the source file (`<name>.test.tsx` beside `<name>.tsx`, `<name>.test.ts` beside `<name>.ts`); keep multi-screen flow tests in `<domain>-flow.test.tsx`.
 
 ---
 

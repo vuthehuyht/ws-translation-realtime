@@ -727,3 +727,151 @@ async def test_forgot_password_endpoint_cognito_5xx_returns_502_and_does_not_bur
     for _ in range(3):
         ok_resp = await async_client.post("/api/v1/auth/forgot-password", json={"email": email})
         assert ok_resp.status_code == 200
+
+
+async def test_reset_password_full_flow_revokes_all_sessions(async_client: AsyncClient) -> None:
+    email = "reset.flow@example.com"
+    old_password = "Password123@"
+    new_password = "NewPassword2@"
+
+    await _register_and_confirm(async_client, email)
+
+    # Login to establish an active session (access token + HttpOnly refresh cookie)
+    login_resp = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": old_password, "rememberMe": True},
+    )
+    assert login_resp.status_code == 200
+    old_access_token = login_resp.json()["tokens"]["accessToken"]
+    old_refresh_cookie = login_resp.cookies.get(REFRESH_COOKIE)
+    assert old_refresh_cookie
+
+    # Request reset OTP
+    fp_resp = await async_client.post("/api/v1/auth/forgot-password", json={"email": email})
+    assert fp_resp.status_code == 200
+
+    # Confirm reset password
+    reset_resp = await async_client.post(
+        "/api/v1/auth/reset-password",
+        json={"email": email, "otpCode": "123456", "newPassword": new_password},
+    )
+    assert reset_resp.status_code == 200
+    assert reset_resp.json()["status"] == "PASSWORD_RESET"
+    assert reset_resp.headers.get("cache-control") == "no-store"
+    set_cookies = reset_resp.headers.get_list("set-cookie")
+    assert any(f"{REFRESH_COOKIE}=" in sc and "Max-Age=0" in sc for sc in set_cookies)
+
+    # Old password is rejected
+    old_login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": old_password},
+    )
+    assert old_login.status_code == 401
+
+    # Old refresh cookie was revoked by admin_global_sign_out
+    async_client.cookies.set(REFRESH_COOKIE, old_refresh_cookie, path=COOKIE_PATH)
+    refresh_resp = await async_client.post("/api/v1/auth/refresh")
+    assert refresh_resp.status_code == 401
+
+    # Old access token was revoked in Redis blocklist
+    logout_with_old = await async_client.post(
+        "/api/v1/auth/logout",
+        headers={"Authorization": f"Bearer {old_access_token}"},
+    )
+    assert logout_with_old.status_code == 401
+    assert "revoked" in logout_with_old.text.lower()
+
+    # Replaying the same OTP fails
+    replay_resp = await async_client.post(
+        "/api/v1/auth/reset-password",
+        json={"email": email, "otpCode": "123456", "newPassword": "AnotherPassword3#"},
+    )
+    assert replay_resp.status_code == 422
+
+    # New password works
+    new_login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": new_password},
+    )
+    assert new_login.status_code == 200
+
+
+async def test_reset_password_invalid_otp_and_weak_password(async_client: AsyncClient) -> None:
+    email = "reset.invalid@example.com"
+    await _register_and_confirm(async_client, email)
+    await async_client.post("/api/v1/auth/forgot-password", json={"email": email})
+
+    wrong_otp = await async_client.post(
+        "/api/v1/auth/reset-password",
+        json={"email": email, "otpCode": "000000", "newPassword": "NewPassword2@"},
+    )
+    assert wrong_otp.status_code == 422
+
+    weak_pw = await async_client.post(
+        "/api/v1/auth/reset-password",
+        json={"email": email, "otpCode": "123456", "newPassword": "NewPassword2"},
+    )
+    assert weak_pw.status_code == 422
+
+
+async def test_reset_password_locks_out_after_5_failed_otp_attempts(
+    async_client: AsyncClient,
+) -> None:
+    email = "reset.bruteforce@example.com"
+    await _register_and_confirm(async_client, email)
+    await async_client.post("/api/v1/auth/forgot-password", json={"email": email})
+
+    for _ in range(5):
+        wrong = await async_client.post(
+            "/api/v1/auth/reset-password",
+            json={"email": email, "otpCode": "000000", "newPassword": "NewPassword2@"},
+        )
+        assert wrong.status_code == 422
+
+    # Even the correct OTP is rejected until the window expires.
+    locked = await async_client.post(
+        "/api/v1/auth/reset-password",
+        json={"email": email, "otpCode": "123456", "newPassword": "NewPassword2@"},
+    )
+    assert locked.status_code == 429
+    assert 1 <= locked.json()["error"]["details"]["retryAfter"] <= 900
+
+
+async def test_reset_password_succeeds_when_global_sign_out_fails(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    email = "reset.signout.fail@example.com"
+    await _register_and_confirm(async_client, email)
+    await async_client.post("/api/v1/auth/forgot-password", json={"email": email})
+    monkeypatch.setattr(
+        get_cognito_client(),
+        "admin_global_sign_out",
+        AsyncMock(side_effect=BadGatewayException("Provider down")),
+    )
+
+    resp = await async_client.post(
+        "/api/v1/auth/reset-password",
+        json={"email": email, "otpCode": "123456", "newPassword": "NewPassword2@"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "PASSWORD_RESET"
+
+
+async def test_reset_password_blocks_suspended_account(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    email = "reset.suspended@example.com"
+    await _register_and_confirm(async_client, email)
+    await async_client.post("/api/v1/auth/forgot-password", json={"email": email})
+
+    await db_session.execute(update(User).where(User.email == email).values(status="SUSPENDED"))
+    await db_session.commit()
+
+    resp = await async_client.post(
+        "/api/v1/auth/reset-password",
+        json={"email": email, "otpCode": "123456", "newPassword": "NewPassword2@"},
+    )
+    assert resp.status_code == 422
