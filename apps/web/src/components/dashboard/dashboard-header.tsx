@@ -1,13 +1,17 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   AudioWaveform,
+  ChevronDown,
   CreditCard,
   LayoutDashboard,
   LogOut,
+  Settings,
+  ShieldAlert,
+  User,
 } from "lucide-react";
 import { signOutSession } from "@/lib/auth-logout";
 import { clearAuthSession } from "@/lib/auth-storage";
@@ -44,10 +48,40 @@ export function DashboardHeader({
   const displayName = userName?.trim() || userEmail || "Host";
   const avatarInitial = displayName.charAt(0).toUpperCase();
 
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
   // A ref closes the double-submit window that state alone leaves open within one tick.
   const signingOutRef = useRef(false);
+  const menuContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (
+        menuContainerRef.current &&
+        !menuContainerRef.current.contains(event.target as Node)
+      ) {
+        setIsMenuOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isMenuOpen]);
 
   const handleLogout = async (global: boolean) => {
     if (signingOutRef.current) {
@@ -142,46 +176,141 @@ export function DashboardHeader({
           </nav>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="hidden items-center gap-2.5 rounded-full border border-border bg-background px-3 py-1.5 md:flex">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600/15 text-xs font-bold text-indigo-600">
+        <div ref={menuContainerRef} className="relative flex items-center gap-3">
+          <button
+            type="button"
+            aria-label="Mở menu tài khoản"
+            aria-haspopup="menu"
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen((prev) => !prev)}
+            className={cn(
+              "flex items-center gap-2.5 rounded-full border border-border bg-background px-2.5 py-1.5 text-left transition-colors hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:px-3",
+              isMenuOpen && "border-primary/40 bg-muted/60"
+            )}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600/15 text-xs font-bold text-indigo-600">
               {avatarInitial}
             </span>
-            <div className="text-left leading-tight">
-              <p className="text-xs font-semibold text-foreground">
+            <div className="hidden leading-tight md:block">
+              <p className="max-w-[160px] truncate text-xs font-semibold text-foreground">
                 {displayName}
               </p>
               {userEmail && userName && (
-                <p className="text-[11px] text-muted-foreground">{userEmail}</p>
+                <p className="max-w-[160px] truncate text-[11px] text-muted-foreground">
+                  {userEmail}
+                </p>
               )}
             </div>
-          </div>
+            <ChevronDown
+              className={cn(
+                "h-3.5 w-3.5 text-muted-foreground transition-transform duration-150",
+                isMenuOpen && "rotate-180 text-foreground"
+              )}
+            />
+          </button>
 
-          {logoutError && (
-            <p role="alert" className="text-xs font-medium text-destructive">
-              {logoutError}
-            </p>
+          {isMenuOpen && (
+            <div
+              role="menu"
+              aria-label="Menu tài khoản"
+              className="absolute right-0 top-full z-40 mt-2 w-64 origin-top-right rounded-xl border border-border bg-card p-1.5 shadow-lg shadow-slate-900/10"
+            >
+              <div className="border-b border-border/80 px-3 py-2.5">
+                <p className="truncate text-xs font-semibold text-foreground">
+                  {displayName}
+                </p>
+                {userEmail && (
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {userEmail}
+                  </p>
+                )}
+              </div>
+
+              <div className="py-1">
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled
+                  title="Trang Hồ sơ cá nhân đang được phát triển"
+                  className="flex w-full cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground/70"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <User className="h-3.5 w-3.5" />
+                    <span>Hồ sơ cá nhân</span>
+                  </span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    Sắp ra mắt
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled
+                  title="Trang Cài đặt đang được phát triển"
+                  className="flex w-full cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground/70"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Settings className="h-3.5 w-3.5" />
+                    <span>Cài đặt</span>
+                  </span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    Sắp ra mắt
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled
+                  title="Trang Thanh toán & Gói Credit đang được phát triển"
+                  className="flex w-full cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground/70"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <CreditCard className="h-3.5 w-3.5" />
+                    <span>Thanh toán &amp; Gói Credit</span>
+                  </span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    Sắp ra mắt
+                  </span>
+                </button>
+              </div>
+
+              <div className="border-t border-border/80 pt-1">
+                {logoutError && (
+                  <p
+                    role="alert"
+                    className="mx-2 mb-1 rounded-md bg-destructive/10 px-2.5 py-1.5 text-[11px] font-medium text-destructive"
+                  >
+                    {logoutError}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void handleLogout(false)}
+                  disabled={isSigningOut}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  <span>Đăng xuất</span>
+                </button>
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => void handleLogout(true)}
+                  disabled={isSigningOut}
+                  title="Đăng xuất khỏi tất cả thiết bị"
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-60"
+                >
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  <span>Đăng xuất mọi thiết bị</span>
+                </button>
+              </div>
+            </div>
           )}
-
-          <button
-            type="button"
-            onClick={() => void handleLogout(true)}
-            disabled={isSigningOut}
-            title="Đăng xuất khỏi tất cả thiết bị"
-            className="inline-flex items-center rounded-lg px-2 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
-          >
-            Mọi thiết bị
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void handleLogout(false)}
-            disabled={isSigningOut}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted disabled:opacity-60"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            <span>Đăng xuất</span>
-          </button>
         </div>
       </div>
     </header>

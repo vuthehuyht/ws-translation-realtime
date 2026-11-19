@@ -36,11 +36,10 @@ async def test_auth_api_full_registration_and_login_flow(async_client: AsyncClie
     assert reg_data["status"] == "CONFIRMATION_REQUIRED"
     assert reg_data.get("userSub") is None
 
-    # 2. Duplicate registration returns the same 201 response to prevent email enumeration
+    # 2. Duplicate registration returns 409 Conflict with RESOURCE_CONFLICT error code
     dup_resp = await async_client.post("/api/v1/auth/register", json=reg_payload)
-    assert dup_resp.status_code == 201
-    assert dup_resp.json()["status"] == "CONFIRMATION_REQUIRED"
-    assert dup_resp.json().get("userSub") is None
+    assert dup_resp.status_code == 409
+    assert dup_resp.json()["error"]["code"] == "RESOURCE_CONFLICT"
 
     # 2b. Resend OTP succeeds (200) and immediate retry is rate-limited (429)
     resend_resp = await async_client.post(

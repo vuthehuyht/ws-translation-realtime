@@ -27,6 +27,56 @@ describe("Host Dashboard (SCR-02)", () => {
     vi.restoreAllMocks();
   });
 
+  it("shows dashboard skeleton while session recovery is in flight", async () => {
+    let resolveRefresh!: (response: Response) => void;
+    vi.spyOn(globalThis, "fetch").mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolveRefresh = resolve;
+        })
+    );
+
+    render(
+      <DashboardLayout>
+        <DashboardPage />
+      </DashboardLayout>
+    );
+
+    expect(screen.getByTestId("dashboard-skeleton")).toBeInTheDocument();
+
+    resolveRefresh(
+      new Response(
+        JSON.stringify({
+          tokens: {
+            accessToken: "recovered-acc",
+            idToken: "recovered-id",
+            refreshToken: null,
+            expiresIn: 3600,
+            tokenType: "Bearer",
+          },
+          user: {
+            id: "user-1",
+            email: "host@example.com",
+            role: "HOST",
+            status: "ACTIVE",
+            fullName: "Skeleton Host",
+            defaultSourceLang: "vi-VN",
+            defaultTargetLangs: ["en-US"],
+            timezone: "Asia/Ho_Chi_Minh",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("heading", { name: /xin chào, skeleton host/i })
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("dashboard-skeleton")).toBeNull();
+  });
+
   it("redirects to /login when there is no active auth session and silent refresh fails", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(JSON.stringify({ error: { code: "UNAUTHORIZED", message: "Missing" } }), {
@@ -343,8 +393,8 @@ describe("Host Dashboard (SCR-02)", () => {
       ).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId("wallet-balance")).toHaveTextContent("$2.00");
-    expect(screen.getByText(/đã chọn 2\/10 ngôn ngữ đích/i)).toBeInTheDocument();
+    expect(await screen.findByTestId("wallet-balance")).toHaveTextContent("$2.00");
+    expect(await screen.findByText(/đã chọn 2\/10 ngôn ngữ đích/i)).toBeInTheDocument();
 
     // Open Top-Up modal and confirm $25 package
     fireEvent.click(
@@ -366,11 +416,17 @@ describe("Host Dashboard (SCR-02)", () => {
 
     expect(screen.getAllByText("Hội nghị Đối tác Q4").length).toBeGreaterThan(0);
 
+    // Open account dropdown menu by clicking the user name & email pill
+    fireEvent.click(screen.getByRole("button", { name: /mở menu tài khoản/i }));
+    expect(screen.getByRole("menuitem", { name: /hồ sơ cá nhân/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /cài đặt/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /thanh toán & gói credit/i })).toBeInTheDocument();
+
     // Logout revokes the session on the backend, clears local state and redirects to /login
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(null, { status: 204 }));
-    fireEvent.click(screen.getByRole("button", { name: /đăng xuất/i }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^đăng xuất$/i }));
     await waitFor(() => {
       expect(pushMock).toHaveBeenCalledWith("/login");
     });
@@ -405,6 +461,25 @@ describe("Host Dashboard (SCR-02)", () => {
         true
       );
 
+    const openAccountMenu = async () => {
+      const trigger = await screen.findByRole("button", { name: /mở menu tài khoản/i });
+      fireEvent.click(trigger);
+    };
+
+    it("closes the account menu on Escape key", async () => {
+      seedSession();
+      render(
+        <DashboardLayout>
+          <DashboardPage />
+        </DashboardLayout>
+      );
+      await openAccountMenu();
+      expect(screen.getByRole("menu", { name: /menu tài khoản/i })).toBeInTheDocument();
+
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByRole("menu", { name: /menu tài khoản/i })).toBeNull();
+    });
+
     it("keeps the session and shows an error when the backend cannot revoke the token", async () => {
       seedSession();
       vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
@@ -419,9 +494,9 @@ describe("Host Dashboard (SCR-02)", () => {
           <DashboardPage />
         </DashboardLayout>
       );
-      await screen.findByRole("button", { name: /đăng xuất$/i });
+      await openAccountMenu();
 
-      fireEvent.click(screen.getByRole("button", { name: /đăng xuất$/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /^đăng xuất$/i }));
 
       expect(await screen.findByRole("alert")).toHaveTextContent(/không thể đăng xuất/i);
       expect(pushMock).not.toHaveBeenCalledWith("/login");
@@ -440,9 +515,9 @@ describe("Host Dashboard (SCR-02)", () => {
           <DashboardPage />
         </DashboardLayout>
       );
-      await screen.findByRole("button", { name: /mọi thiết bị/i });
+      await openAccountMenu();
 
-      fireEvent.click(screen.getByRole("button", { name: /mọi thiết bị/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /đăng xuất mọi thiết bị/i }));
 
       await waitFor(() => {
         expect(pushMock).toHaveBeenCalledWith("/login");
@@ -462,9 +537,9 @@ describe("Host Dashboard (SCR-02)", () => {
           <DashboardPage />
         </DashboardLayout>
       );
-      await screen.findByRole("button", { name: /mọi thiết bị/i });
+      await openAccountMenu();
 
-      fireEvent.click(screen.getByRole("button", { name: /mọi thiết bị/i }));
+      fireEvent.click(screen.getByRole("menuitem", { name: /đăng xuất mọi thiết bị/i }));
 
       expect(fetchMock).not.toHaveBeenCalled();
       expect(pushMock).not.toHaveBeenCalledWith("/login");
@@ -486,7 +561,8 @@ describe("Host Dashboard (SCR-02)", () => {
           <DashboardPage />
         </DashboardLayout>
       );
-      const logoutButton = await screen.findByRole("button", { name: /đăng xuất$/i });
+      await openAccountMenu();
+      const logoutButton = screen.getByRole("menuitem", { name: /^đăng xuất$/i });
 
       fireEvent.click(logoutButton);
       fireEvent.click(logoutButton);
@@ -494,7 +570,7 @@ describe("Host Dashboard (SCR-02)", () => {
       await waitFor(() => {
         expect(logoutButton).toBeDisabled();
       });
-      expect(screen.getByRole("button", { name: /mọi thiết bị/i })).toBeDisabled();
+      expect(screen.getByRole("menuitem", { name: /đăng xuất mọi thiết bị/i })).toBeDisabled();
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
       resolveLogout(new Response(null, { status: 204 }));
@@ -519,7 +595,8 @@ describe("Host Dashboard (SCR-02)", () => {
           <DashboardPage />
         </DashboardLayout>
       );
-      const logoutButton = await screen.findByRole("button", { name: /đăng xuất$/i });
+      await openAccountMenu();
+      const logoutButton = screen.getByRole("menuitem", { name: /^đăng xuất$/i });
 
       fireEvent.click(logoutButton);
       await screen.findByRole("alert");

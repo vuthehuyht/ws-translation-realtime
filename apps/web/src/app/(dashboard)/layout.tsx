@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { DashboardSessionProvider } from "@/components/dashboard/dashboard-session-context";
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import {
   getRefreshLeadDelayMs,
   silentRefreshSession,
@@ -125,11 +126,7 @@ export default function DashboardLayout({
   }, [session?.expiresAt]);
 
   if (!isReady) {
-    return (
-      <div className="flex flex-1 items-center justify-center bg-slate-50 text-sm text-muted-foreground">
-        Đang tải không gian làm việc...
-      </div>
-    );
+    return <DashboardSkeleton includeHeader={true} />;
   }
 
   return (
