@@ -31,9 +31,9 @@ Toàn bộ thiết kế nghiệp vụ, chức năng, kiến trúc hạ tầng, h
    - Phân quyền `Host`, `Speaker`, `Listener`, `System Admin`, Anti-abuse gói `FREE` & Quyền riêng tư (Consent/GDPR).
    - 4 gói Subscription cố định (`FREE`/`PRO`/`BUSINESS`/`ENTERPRISE`), Ví Credit 3 ngăn (`1 USD = 100 Cr`, trừ `Promo -> Plan -> Top-up`), tính cước chính xác **theo từng giây**, 2 sổ Lịch sử Nạp & Sử dụng, Multi-provider TTS (`vi-VN`) và Notification Matrix.
 
-2. **[02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md) — Danh sách 42 Chức năng Hệ thống (FSD)**
-   - Ma trận **42 chức năng chi tiết** (`FR-101` .. `FR-604`) chia làm 6 phân hệ (`MOD-01` đến `MOD-06`).
-   - Bao gồm đầy đủ luồng Auth Cognito + GDPR (`FR-107`), Mic Check Lobby, 5 tính năng mở rộng theo gói (`FR-207`, `FR-208`), Multi-provider TTS (`vi-VN`), Xuất biên bản đa định dạng, **AI Tóm tắt Bedrock (`FR-407`)** và **Session Analytics (`FR-408`)**.
+2. **[02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md) — Danh sách 47 Chức năng Hệ thống (FSD)**
+   - Ma trận **47 chức năng chi tiết** (`FR-101` .. `FR-609`) chia làm 6 phân hệ (`MOD-01` đến `MOD-06`).
+   - Bao gồm đầy đủ luồng Auth Cognito + GDPR (`FR-107`), Mic Check Lobby, 5 tính năng mở rộng theo gói (`FR-207`, `FR-208`), Multi-provider TTS (`vi-VN`), Xuất biên bản đa định dạng, **AI Tóm tắt Bedrock (`FR-407`)**, **Session Analytics (`FR-408`)** và **6 phân hệ System Admin Portal (`FR-604` .. `FR-609`)**.
 
 3. **[03-system-architecture-and-techstack.md](file:///D:/code/ws-translation-realtime/docs/specs/03-system-architecture-and-techstack.md) — Kiến trúc Hệ thống, HA/Zero-Downtime & CI/CD (SAD)**
    - Kiến trúc triển khai **AWS Single-AZ** (tiết kiệm 100% phí Cross-AZ, độ trễ nội bộ `< 1ms`).
@@ -46,11 +46,11 @@ Toàn bộ thiết kế nghiệp vụ, chức năng, kiến trúc hạ tầng, h
    - Cấu trúc file lưu trữ S3 (`master.json` và `summary.json`).
    - Danh mục 6 màn hình giao diện Next.js (`SCR-01` .. `SCR-06`).
 
-5. **[epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md) — Phân rã 9 Epic & 36 Sub-Epic Theo Tính năng**
-   - Chia toàn bộ dự án thành **9 Epic lớn** (`EPIC-01` .. `EPIC-09`) và **36 Sub-Epic** kèm trạng thái triển khai thực tế (`DONE` / `IN_PROGRESS` / `TODO`) và sơ đồ phụ thuộc.
+5. **[epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md) — Phân rã 9 Epic & 39 Sub-Epic Theo Tính năng**
+   - Chia toàn bộ dự án thành **9 Epic lớn** (`EPIC-01` .. `EPIC-09`) và **39 Sub-Epic** kèm trạng thái triển khai thực tế (`DONE` / `IN_PROGRESS` / `TODO`), phân tầng `P0`/`P1`/`P2` và sơ đồ phụ thuộc.
 
-6. **[implementation-tasks-roadmap.md](file:///D:/code/ws-translation-realtime/docs/tasks/implementation-tasks-roadmap.md) — Bảng Phân rã 113 Task Nguyên tử (Granular Tasks)**
-   - Đặc tả chi tiết input/output, luồng xử lý và tiêu chí nghiệm thu cho từng task kỹ thuật (đã đồng bộ Credit 3 ngăn, Per-Second Billing & tiến độ `[DONE]`).
+6. **[implementation-tasks-roadmap.md](file:///D:/code/ws-translation-realtime/docs/tasks/implementation-tasks-roadmap.md) — Bảng Phân rã 120 Task Nguyên tử (Granular Tasks)**
+   - Đặc tả chi tiết input/output, luồng xử lý và tiêu chí nghiệm thu cho từng task kỹ thuật (đã đồng bộ Credit 3 ngăn, Per-Second Billing, Admin Portal & tiến độ `[DONE]`).
 
 ---
 

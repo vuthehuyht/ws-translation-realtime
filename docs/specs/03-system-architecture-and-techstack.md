@@ -1,7 +1,7 @@
 # Thiết kế Kiến trúc Hệ thống, HA/Zero-Downtime & Tech Stack (System Architecture & Technical Design)
 
 - **Mã tài liệu**: `DOC-03-SAD`
-- **Phiên bản**: `2.1` (Bổ sung Multi-Provider TTS `vi-VN`, Per-Second Metering + 15s ACID Flush, Entitlements Cache & SES Notification Worker)
+- **Phiên bản**: `2.2` (Bổ sung kiến trúc System Admin Portal: `pricing_configs`, `admin_audit_logs`, Redis AI Kill-switch & Azure Speech `F0`/`S0`)
 - **Ngày cập nhật**: 2026-11-19
 - **Tài liệu liên quan**:
   - [01-business-requirements-and-billing.md](file:///D:/code/ws-translation-realtime/docs/specs/01-business-requirements-and-billing.md)
@@ -148,6 +148,7 @@ Speaker Client gửi các frame âm thanh mỗi `100ms` (PCM 16kHz, 16-bit, Mono
 | `room:{roomId}:tts_count` | `HASH` | 12h | Lưu số người nghe đang bật loa theo từng ngôn ngữ (ví dụ: `{"en-US": 42, "ja-JP": 15, "ko-KR": 0}`). Worker đọc key này trước khi gọi Polly. |
 | `host:{hostId}:entitlements` | `STRING` (JSON) | 15m | Cache `planCode` và object `entitlements` của gói Subscription hiện tại phục vụ `EntitlementGuard` (`< 1ms`), tự invalidate khi nâng/hạ gói. |
 | `wallet:{hostId}:credits` | `HASH` | 24h | Số dư Credit 3 ngăn thời gian thực (`promo`, `plan`, `topup`, `total`), trừ realtime mỗi 1 giây theo Per-Second Metering và flush ACID xuống PostgreSQL. |
+| `ai:provider:killswitch` | `HASH` | No TTL | Cờ Kill-switch của System Admin (VD `{"azure_tts:vi-VN": "TEXT_ONLY"}`) để hạ nhanh provider/ngôn ngữ gặp sự cố diện rộng sang `Text-only` không cần deploy. |
 
 ### 3.3. Thiết kế Cơ sở Dữ liệu Quan hệ trên PostgreSQL 16 (10 Bảng ACID & S3 Offload)
 
@@ -244,8 +245,8 @@ Cơ sở dữ liệu chính của hệ thống là **PostgreSQL 16**, kết nố
     - `total_cost`: `NUMERIC(10, 6)` NOT NULL
     - `created_at`: `TIMESTAMPTZ` NOT NULL
 
-> **Lộ trình Migration tiếp theo (`0002_credit_plans_and_ledger` — xem [2026-11-19-credit-plans-and-billing-design.md](file:///D:/code/ws-translation-realtime/docs/superpowers/specs/2026-11-19-credit-plans-and-billing-design.md))**:
-> - Thêm **4 bảng mới**: `plans` (4 gói cố định + JSONB `entitlements`), `subscriptions` (gói đang hoạt động & chu kỳ của Host), `credit_packs` (3 gói Top-up cố định `PACK_S/M/L`), và `credit_ledger` (Sổ cái lịch sử sử dụng & biến động Credit theo sự kiện).
+> **Lộ trình Migration tiếp theo (`0002_credit_plans_and_ledger` & `0003_admin_portal` — xem [2026-11-19-credit-plans-and-billing-design.md](file:///D:/code/ws-translation-realtime/docs/superpowers/specs/2026-11-19-credit-plans-and-billing-design.md))**:
+> - Thêm **6 bảng mới**: `plans` (4 gói cố định + JSONB `entitlements`), `subscriptions` (gói đang hoạt động & chu kỳ của Host), `credit_packs` (3 gói Top-up cố định `PACK_S/M/L`), `credit_ledger` (Sổ cái lịch sử sử dụng & biến động Credit theo sự kiện), `pricing_configs` (Bảng đơn giá Credit + tỷ giá `USD -> VND` có versioning cho Admin), và `admin_audit_logs` (Nhật ký kiểm toán bất biến append-only ghi `admin_id`, `action`, `target_type`, `target_id`, `before_json`, `after_json`, `reason`, `ip_address`).
 > - Nâng cấp `wallets` thành 3 ngăn (`promo_credits`, `plan_credits`, `topup_credits` + hạn dùng & `auto_topup_pack_id`), `payment_transactions` thêm `credits_granted`/`bonus_credits`/`bucket`, `usage_ledger` thêm `duration_seconds`/`listener_seconds`/`credits_deducted`/`deducted_breakdown`, `room_transcripts` thêm `expires_at` (chốt retention theo gói tại thời điểm kết thúc phòng + 14 ngày ân hạn khi hạ gói), và `rooms` thêm `scheduled_start_at`/`branding_config`/`tts_voice_config`/`profanity_filter_enabled`/`speaker_ids`.
 
 ---

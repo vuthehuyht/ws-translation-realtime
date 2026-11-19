@@ -1,7 +1,7 @@
 # Danh mục Chức năng & Bảng Phân rã Task Chi tiết (Granular Task Breakdown & Technical Roadmap)
 
 - **Mã tài liệu**: `DOC-05-TASKS`
-- **Phiên bản**: `3.0` (Đồng bộ 100% với 4 Gói cố định, Ví Credit 3 ngăn, `EntitlementGuard`, Per-Second Billing, Lịch sử Nạp/Sử dụng, Multi-Provider TTS `vi-VN` & Trạng thái `[DONE]` theo code mới nhất)
+- **Phiên bản**: `3.1` (Bổ sung đầy đủ 6 phân hệ System Admin Portal `TASK-OPS-09..13` & `TASK-UI-12..13` — 120 Tasks)
 - **Ngày cập nhật**: 2026-11-19
 - **Tài liệu tham chiếu**:
   - [epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md) *(Bản phân rã 9 Epic & 36 Sub-Epic kèm phân tầng `P0/P1/P2`)*
@@ -13,7 +13,7 @@
 
 ---
 
-## Mục lục Phân hệ (12 Phân hệ - 113 Chức năng Nguyên tử)
+## Mục lục Phân hệ (12 Phân hệ - 120 Chức năng Nguyên tử)
 
 1. [Phân hệ 1: Xác thực & Quản lý Tài khoản (Authentication & Accounts)](#phân-hệ-1-xác-thực--quản-lý-tài-khoản-authentication--accounts) (11 Tasks — 8 `DONE`)
 2. [Phân hệ 2: Hồ sơ Cá nhân, Doanh nghiệp & Quyền riêng tư GDPR (User Profile & Privacy)](#phân-hệ-2-hồ-sơ-cá-nhân--cài-đặt-doanh-nghiệp-user-profile--settings) (6 Tasks)
@@ -25,8 +25,8 @@
 8. [Phân hệ 8: Nhận diện, Dịch thuật & Multi-Provider Neural TTS (Streaming AI Pipeline)](#phân-hệ-8-nhận-diện-dịch-thuật--tổng-hợp-giọng-nói-ai-streaming-ai-pipeline) (11 Tasks)
 9. [Phân hệ 9: Đo đếm & Tính cước Theo Từng Giây (Per-Second Credit Billing Engine)](#phân-hệ-9-đo-đếm--tính-cước-theo-từng-giây-per-second-credit-billing-engine) (7 Tasks)
 10. [Phân hệ 10: Biên bản S3, AI Tóm tắt Bedrock & Session Analytics](#phân-hệ-10-biên-bản-dịch-thuật--ai-tóm-tắt-qua-bedrock-transcripts--ai-summary) (10 Tasks)
-11. [Phân hệ 11: Hạ tầng, Độ sẵn sàng cao & Quản trị Hệ thống (HA, Failover & Admin Portal)](#phân-hệ-11-hạ-tầng-độ-sẵn-sàng-cao--quản-trị-hệ-thống-ha-failover--admin-portal) (8 Tasks)
-12. [Phân hệ 12: Màn hình Giao diện Người dùng Web (Next.js 15 UI Screens)](#phân-hệ-12-màn-hình-giao-diện-người-dùng-web-nextjs-15-ui-screens) (11 Tasks — 3 `DONE`)
+11. [Phân hệ 11: Hạ tầng, Độ sẵn sàng cao & Cổng Quản trị Admin (`ADM-01..06`)](#phân-hệ-11-hạ-tầng-độ-sẵn-sàng-cao--quản-trị-hệ-thống-ha-failover--admin-portal) (13 Tasks)
+12. [Phân hệ 12: Màn hình Giao diện Người dùng Web & Admin Portal (Next.js 15 UI Screens)](#phân-hệ-12-màn-hình-giao-diện-người-dùng-web-nextjs-15-ui-screens) (13 Tasks — 3 `DONE`)
 
 ---
 
@@ -1027,16 +1027,46 @@
   - Tạo bản ghi `payment_transactions (type = 'ADMIN_ADJUSTMENT', amount = amount, status = 'SUCCEEDED', raw_webhook_meta = { admin_id, reason })`.
 - **Tiêu chí nghiệm thu (AC)**: Mọi thao tác can thiệp tài chính đều có dấu vết kiểm toán (Audit Trail) rõ ràng.
 
-### `TASK-OPS-08`: API Admin Thống kê Doanh thu & Chi phí Toàn sàn (Admin Overview Stats)
-- **Mã chức năng**: `FR-604.5` | **Scope**: `Backend Admin API`
+### `TASK-OPS-08`: API Admin Thống kê Doanh thu, COGS & Gross Margin Toàn sàn (`ADM-01`)
+- **Mã chức năng**: `FR-604` | **Scope**: `Backend Admin API`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `GET /api/v1/admin/stats/overview`.
-  - Thống kê:
-    - Tổng tiền nạp của người dùng trong ngày / tháng.
-    - Tổng tiền cước đã trừ (`usage_ledger`).
-    - Tổng số phút dịch thuật đã thực hiện.
-    - Ước tính chi phí AWS phát sinh thực tế và lợi nhuận gộp.
-- **Tiêu chí nghiệm thu (AC)**: Trả về số liệu tổng quan kinh doanh chính xác phục vụ ban quản trị.
+  - Endpoint `GET /api/v1/admin/stats/overview` (lọc ngày/tuần/tháng): tổng doanh thu Stripe/VietQR, tổng Credit cấp/dùng/hết hạn (`Breakage`), tổng AWS/Azure COGS, tính **Gross Margin %** (cảnh báo `< 55%`), số phòng `ACTIVE`, người nghe online và DAU/MAU.
+- **Tiêu chí nghiệm thu (AC)**: Số liệu khớp 100% `payment_transactions` và `usage_ledger`.
+
+### `TASK-OPS-09`: Migration `0003_admin_portal`, Dependency `require_admin` & Audit Log Bất biến
+- **Mã chức năng**: `FR-604`, `FR-609` | **Scope**: `Backend Models, Security & Alembic`
+- **Nghiệp vụ chi tiết**:
+  - Migration tạo bảng `pricing_configs` (lưu phiên bản đơn giá Credit + tỷ giá VND) và `admin_audit_logs` (append-only: `admin_id`, `action`, `target_type`, `target_id`, `before_json`, `after_json`, `reason`, `ip_address`, `created_at`).
+  - Dependency `require_admin` kiểm tra `user.role == 'ADMIN'`; helper ghi Audit Log bắt buộc `reason` trên mọi endpoint ghi của `/api/v1/admin/*`.
+- **Tiêu chí nghiệm thu (AC)**: Host thường gọi `/api/v1/admin/*` bị chặn `403 Forbidden`; mọi thao tác ghi đều có bản ghi `admin_audit_logs`.
+
+### `TASK-OPS-10`: API Admin Quản lý Host 360°, Khóa Tài khoản, Gán Gói B2B & Anti-Abuse (`ADM-02`, `ADM-03`)
+- **Mã chức năng**: `FR-605`, `FR-606` | **Scope**: `Backend Admin API`
+- **Nghiệp vụ chi tiết**:
+  - `GET /admin/hosts` & `GET /admin/hosts/{hostId}` (360° view).
+  - `POST /admin/hosts/{hostId}/status` (`SUSPENDED` -> `GlobalSignOut` + đóng an toàn phòng đang chạy); `POST /admin/hosts/{hostId}/subscription` (gán/gia hạn gói tay B2B).
+  - `GET/PUT /admin/anti-abuse/domains` (quản lý blocklist email rác) & `GET/PUT /admin/{plans,credit-packs}/{code}` (sửa gói/entitlements + invalidate cache Redis).
+- **Tiêu chí nghiệm thu (AC)**: Khóa tài khoản ngắt phiên tức thì; đổi `entitlements` có hiệu lực `< 1s`.
+
+### `TASK-OPS-11`: API Admin Tra cứu Giao dịch & Khớp lệnh VietQR Thủ công (`ADM-04`)
+- **Mã chức năng**: `FR-607` | **Scope**: `Backend Admin API`
+- **Nghiệp vụ chi tiết**:
+  - `GET /api/v1/admin/transactions` (tra cứu toàn sàn theo cổng, trạng thái, `tx_id`/`txCode`).
+  - `POST /api/v1/admin/transactions/{txId}/reconcile`: Admin nhập `bankRefCode` và `reason` để khớp tay các giao dịch VietQR khách quên ghi đúng mã `TRxxxxxx` (khóa dòng `FOR UPDATE` idempotent, kích hoạt gói hoặc cộng `topup_credits` + ghi `credit_ledger` & `admin_audit_logs`).
+- **Tiêu chí nghiệm thu (AC)**: Không thể khớp trùng 1 giao dịch 2 lần.
+
+### `TASK-OPS-12`: API Admin Giám sát Phòng Live, Force End Room & AI Provider Kill-switch (`ADM-06`)
+- **Mã chức năng**: `FR-609` | **Scope**: `Backend Admin API & Redis`
+- **Nghiệp vụ chi tiết**:
+  - `GET /api/v1/admin/rooms/live` & `POST /api/v1/admin/rooms/{roomId}/force-end` (`reason` -> đóng khẩn cấp phòng treo/vi phạm, flush giây lẻ cuối cùng).
+  - `GET/PUT /api/v1/admin/ai-providers/killswitch`: theo dõi tỷ lệ lỗi `5xx` của AWS AI & Azure Speech (`vi-VN`), bật/tắt cờ `ai:provider:killswitch` trên Redis để hạ nhanh ngôn ngữ/provider sang `Text-only`.
+- **Tiêu chí nghiệm thu (AC)**: Force End đóng phòng `< 1s`; Kill-switch áp dụng ngay câu nói kế tiếp.
+
+### `TASK-OPS-13`: API Admin Tra cứu Nhật ký Kiểm toán Bất biến (`ADM-06`)
+- **Mã chức năng**: `FR-609` | **Scope**: `Backend Admin API`
+- **Nghiệp vụ chi tiết**:
+  - `GET /api/v1/admin/audit-logs` (phân trang, lọc theo `adminId`, `action`, `targetType`, khoảng thời gian, trả `beforeJson`/`afterJson`/`reason`/`ipAddress`).
+- **Tiêu chí nghiệm thu (AC)**: Chỉ đọc (read-only), không có endpoint sửa/xóa audit log.
 
 ---
 
@@ -1160,6 +1190,19 @@
     3. **Lịch sử Nạp tiền (`topup-history`)**: Phân trang, lọc loại/cổng/ngày, nút tải hóa đơn PDF VAT.
     4. **Lịch sử Sử dụng (`usage-history`)**: Bảng `credit_ledger` theo từng phiên / AI Summary / hết hạn; bấm từng dòng mở Drawer bóc tách chi tiết từng giây & xuất CSV.
 - **Tiêu chí nghiệm thu (AC)**: 4 tab đồng bộ real-time, đối soát minh bạch từng ngăn Credit.
+
+### `TASK-UI-12`: SCR-ADM-01..03 Giao diện Admin Dashboard, Quản lý Host 360° & Gói/Bảng Giá
+- **Mã chức năng**: `SCR-ADM-01..03` | **Scope**: `Frontend Next.js (apps/web/src/app/(admin)/admin/*)`
+- **Nghiệp vụ chi tiết**:
+  - Layout Admin kèm `AdminGuard` (`role === 'ADMIN'`) và Confirm Modal bắt buộc nhập `reason`.
+  - `/admin` (Doanh thu, COGS, Gross Margin %, phòng live, độ trễ P95), `/admin/hosts` & `/admin/hosts/[id]` (Hồ sơ 360°, Khóa, Gán gói B2B, Cộng/Trừ Credit 3 ngăn, Anti-Abuse), `/admin/plans-pricing` (Chỉnh 4 gói + JSON `entitlements`, 3 Top-up Packs, đơn giá Credit & tỷ giá VND).
+- **Tiêu chí nghiệm thu (AC)**: User `HOST` truy cập `/admin/*` bị redirect về `/dashboard`; mọi thao tác ghi yêu cầu nhập `reason`.
+
+### `TASK-UI-13`: SCR-ADM-04..06 Giao diện Admin Đối soát VietQR/Hoàn tiền, Promo & Vận hành Live/Audit
+- **Mã chức năng**: `SCR-ADM-04..06` | **Scope**: `Frontend Next.js`
+- **Nghiệp vụ chi tiết**:
+  - `/admin/payments` (Tra cứu giao dịch, Modal Khớp tay VietQR & Modal Hoàn tiền), `/admin/promos` (CRUD mã Promo & hiệu quả chiến dịch), `/admin/operations` (Live Rooms + Force End, AI Provider Kill-switch cho AWS/Azure Speech `vi-VN`, bảng tra cứu `admin_audit_logs` xem diff `before`/`after`).
+- **Tiêu chí nghiệm thu (AC)**: Hiển thị mượt diff Audit Log, thao tác cứu hộ & khớp lệnh rõ ràng không bấm nhầm.
 
 ---
 

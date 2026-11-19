@@ -1,7 +1,7 @@
 # Phân rã Epic & Sub-Epic Theo Tính năng Chính (Feature Epics & Sub-Epics Breakdown)
 
 - **Mã tài liệu**: `DOC-06-EPICS`
-- **Phiên bản**: `1.2` (Bổ sung phân tầng ưu tiên `P0 MVP / P1 Growth / P2 Enterprise`, Multi-Provider TTS `vi-VN`, Anti-Abuse, Grace Period/Notifications, Mic Check & Consent/GDPR)
+- **Phiên bản**: `1.3` (Mở rộng đầy đủ 6 phân hệ System Admin Portal `ADM-01..06` -> 9 Epics / 39 Sub-Epics)
 - **Ngày cập nhật**: `2026-11-19`
 - **Đồng bộ theo commit mới nhất**: `fefd1f4` (`feat(auth): implement reset password with OTP and optimize user queries`)
 - **Tài liệu liên quan**:
@@ -13,7 +13,7 @@
 
 ---
 
-## 1. Tổng quan Ma trận Epic (9 Epics — 36 Sub-Epics)
+## 1. Tổng quan Ma trận Epic (9 Epics — 39 Sub-Epics)
 
 Quy ước trạng thái & mức độ ưu tiên:
 - **Trạng thái**: `DONE` (hoàn tất code + test + merge) | `IN_PROGRESS` (hoàn thiện một phần) | `TODO` (chưa triển khai).
@@ -32,7 +32,7 @@ Quy ước trạng thái & mức độ ưu tiên:
 | **EPIC-06** | Pipeline AI Dịch thuật Realtime & Trải nghiệm Người nghe | 5 | `MOD-03` (`FR-303`..`FR-306`), `MOD-04` (`FR-401`..`FR-405`), `SCR-03`, `SCR-04` | `TODO` |
 | **EPIC-07** | Động cơ Tính cước Theo Từng Giây & Kiểm soát Cạn Credit | 3 | `MOD-05` (`FR-504`..`FR-507`) | `TODO` |
 | **EPIC-08** | Biên bản Dịch thuật, AI Tóm tắt & Session Analytics | 4 | `MOD-04` (`FR-402`, `FR-406`..`FR-408`), `SCR-05` | `TODO` |
-| **EPIC-09** | Độ sẵn sàng cao, Failover 0ms, Giám sát & Quản trị Hệ thống | 3 | `MOD-06` (`FR-601`..`FR-604`) | `TODO` |
+| **EPIC-09** | Độ sẵn sàng cao, Failover 0ms, Giám sát & Cổng Quản trị Admin (`ADM-01..06`) | 6 | `MOD-06` (`FR-601`..`FR-609`), `SCR-ADM-01..06` | `TODO` |
 
 ---
 
@@ -185,16 +185,19 @@ flowchart TD
 
 ---
 
-### EPIC-09: Độ sẵn sàng cao, Failover 0ms, Giám sát & Quản trị Hệ thống (HA, Failover, Observability & Admin Portal)
+### EPIC-09: Độ sẵn sàng cao, Failover 0ms, Giám sát & Cổng Quản trị Admin (HA, Observability & System Admin Portal)
 
-- **Mục tiêu**: Vận hành Production chuẩn doanh nghiệp: chuyển đổi container không rớt từ khi deploy hoặc crash, giám sát độ trễ P95/biên lợi nhuận trên CloudWatch và bộ API quản trị cho System Admin.
-- **Tham chiếu**: `MOD-06` (`FR-601`..`FR-604`).
+- **Mục tiêu**: Vận hành Production chuẩn doanh nghiệp: chuyển đổi container không rớt từ khi deploy hoặc crash, giám sát độ trễ P95/biên lợi nhuận trên CloudWatch và xây dựng trọn bộ **System Admin Portal** (1 vai trò `ADMIN` duy nhất tại `/admin/*`, 6 phân hệ `ADM-01..06` kèm `admin_audit_logs` bất biến).
+- **Tham chiếu**: `MOD-06` (`FR-601`..`FR-609`), `SCR-ADM-01`..`SCR-ADM-06`.
 
 | Mã Sub-Epic | Tên Sub-Epic | Ưu tiên | Scope & Deliverables chính | Tasks liên quan | Trạng thái |
 | :--- | :--- | :---: | :--- | :--- | :---: |
-| **EP09-S1** | Zero-Downtime `SIGTERM` Handover & Crash Replay Failover | `P2` | Xử lý `SIGTERM` (`DRAINING` -> đợi `isFinal` -> `PREPARE_HANDOVER` -> Make-Before-Break 0ms); Crash Replay Failover `< 500ms` (Client mất ACK 300ms -> reconnect -> Container mới đọc `last_committed_seq` + replay Redis Stream & Client Ring Buffer 5s). | `TASK-OPS-01..02` | `TODO` |
-| **EP09-S2** | Deep Health Check & CloudWatch Observability | `P1` *(Health)* / `P2` *(Alarms)* | Nâng cấp `GET /api/v1/health` kiểm tra sâu PostgreSQL (`SELECT 1`) + Redis (`PING < 5ms`, trả `503` khi lỗi); CloudWatch Custom Metrics (`ActiveRoomsCount`, `Stt/Mt/Tts/E2E Latency P95`, `BillingDeductionErrorsCount`) + Alarm `E2E P95 > 1500ms` bắn SNS/Slack. | `TASK-OPS-03..04` | `TODO` |
-| **EP09-S3** | System Admin Portal APIs (Plans, Pricing, Promo, Refund & Stats) | `P2` | Admin APIs (RBAC `role == ADMIN`): `GET/PUT /admin/pricing` & `/admin/plans`, CRUD `/admin/promos`, `POST /admin/wallets/{hostId}/adjust` (Audit Log), `POST /admin/transactions/{txId}/refund`, `GET /admin/stats/overview` (Doanh thu Credit vs AWS COGS & Gross Margin). | `TASK-OPS-05..08`, `TASK-PAY-07` | `TODO` |
+| **EP09-S1** | Zero-Downtime `SIGTERM` Handover & Crash Replay Failover | `P2` | Xử lý `SIGTERM` (`DRAINING` -> đợi `isFinal` -> `PREPARE_HANDOVER` -> Make-Before-Break 0ms); Crash Replay Failover `< 500ms` (mất ACK 300ms -> reconnect -> replay Redis Stream & Client Ring Buffer 5s). | `TASK-OPS-01..02` | `TODO` |
+| **EP09-S2** | Deep Health Check & CloudWatch Observability | `P1` *(Health)* / `P2` *(Alarms)* | Nâng cấp `GET /api/v1/health` kiểm tra PostgreSQL + Redis (`503` khi lỗi); CloudWatch Custom Metrics (`ActiveRoomsCount`, `Stt/Mt/Tts/E2E Latency P95`, `BillingDeductionErrorsCount`) + Alarm `E2E P95 > 1500ms` bắn SNS/Slack. | `TASK-OPS-03..04` | `TODO` |
+| **EP09-S3** | Admin Foundation (`require_admin`, `admin_audit_logs`, `pricing_configs`) & Executive Dashboard (`ADM-01`) | `P1` | Migration `0003_admin_portal` (`pricing_configs`, `admin_audit_logs` append-only); middleware `require_admin` & helper ghi Audit Log bắt buộc `reason`; `GET /admin/stats/overview` (Doanh thu Stripe/VietQR, COGS, Gross Margin % cảnh báo `< 55%`, phòng live). | `TASK-OPS-08..09` (`FR-604`) | `TODO` |
+| **EP09-S4** | Admin Quản lý Host 360°, Ví Thủ công, Anti-Abuse & Gói/Bảng Giá Động (`ADM-02`, `ADM-03`) | `P1` *(Host/Pricing)* / `P2` *(B2B)* | APIs `GET /admin/hosts/*`, `POST /admin/hosts/{id}/{status,subscription}`, `POST /admin/wallets/{id}/adjust` (3 ngăn), `GET/PUT /admin/anti-abuse/domains`, `GET/PUT /admin/{plans,credit-packs,pricing}` (kèm tỷ giá VND + invalidate Redis cache). | `TASK-OPS-05, 07, 10` (`FR-605`, `FR-606`) | `TODO` |
+| **EP09-S5** | Admin Đối soát VietQR Thủ công, Hoàn tiền & Chiến dịch Promo (`ADM-04`, `ADM-05`) | `P1` *(VietQR Reconcile/Promo)* / `P2` *(Refund)* | APIs `GET /admin/transactions`, `POST /admin/transactions/{txId}/reconcile` (khớp tay sao kê VietQR idempotent), `POST /admin/transactions/{txId}/refund` (Stripe/VietQR + trừ ngược Credit), CRUD `/admin/promos` kèm thống kê hiệu quả. | `TASK-OPS-06, 11`, `TASK-PAY-07` (`FR-607`, `FR-608`) | `TODO` |
+| **EP09-S6** | Admin Live Rooms Force End, AI Kill-switch, Audit Logs & 6 Màn hình UI `/admin/*` (`ADM-06`) | `P2` | APIs `GET /admin/rooms/live`, `POST /admin/rooms/{id}/force-end`, `GET/PUT /admin/ai-providers/killswitch` (hạ nhanh AWS/Azure Speech `vi-VN` sang `Text-only`), `GET /admin/audit-logs`; triển khai 6 màn hình `SCR-ADM-01..06` trong `apps/web/src/app/(admin)/admin/*` với `AdminGuard` & Confirm Reason Modal. | `TASK-OPS-12..13`, `TASK-UI-12..13` (`FR-609`) | `TODO` |
 
 ---
 
