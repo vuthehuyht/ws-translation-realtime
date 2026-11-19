@@ -86,3 +86,10 @@ class ResendOtpRequest(_EmailRequestBase):
     """Payload to request resending the 6-digit registration OTP."""
 
     email: str = Field(..., pattern=EMAIL_REGEX)
+
+
+class ForgotPasswordRequest(_EmailRequestBase):
+    """Payload to request a 6-digit password reset OTP."""
+
+    email: str = Field(..., pattern=EMAIL_REGEX)
+

@@ -4,7 +4,9 @@ Orchestrates Cognito integration with PostgreSQL User and Wallet repositories.
 """
 
 import logging
+import math
 import time
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -29,12 +31,14 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.schemas.requests import (
     ConfirmRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     RegisterRequest,
     ResendOtpRequest,
 )
 from app.schemas.responses import (
     ConfirmResponse,
+    ForgotPasswordResponse,
     LoginResponse,
     RefreshResponse,
     RegisterResponse,
@@ -46,6 +50,8 @@ from app.services import token_blocklist
 
 WELCOME_BONUS_AMOUNT = Decimal("2.0000")
 RESEND_OTP_COOLDOWN_SECONDS = 60
+FORGOT_PASSWORD_MAX_ATTEMPTS = 3
+FORGOT_PASSWORD_WINDOW_SECONDS = 900
 logger = logging.getLogger(__name__)
 
 
@@ -246,6 +252,72 @@ class AuthService:
             email=normalized_email,
             retry_after=RESEND_OTP_COOLDOWN_SECONDS,
         )
+
+    async def forgot_password(self, request: ForgotPasswordRequest) -> ForgotPasswordResponse:
+        """Initiate password reset OTP with a 3-per-15-minute sliding-window Redis rate limit."""
+        normalized_email = request.email.strip().lower()
+        if self.redis is None:
+            raise ServiceUnavailableException("Rate limit store is temporarily unavailable")
+
+        rate_key = f"email:{normalized_email}:forgot_password_attempts"
+        now = time.time()
+        window_start = now - FORGOT_PASSWORD_WINDOW_SECONDS
+        member = f"{now:.6f}:{uuid.uuid4().hex}"
+
+        try:
+            async with self.redis.pipeline(transaction=True) as pipe:
+                pipe.zremrangebyscore(rate_key, "-inf", window_start)
+                pipe.zadd(rate_key, {member: now})
+                pipe.zcard(rate_key)
+                pipe.zrange(rate_key, 0, 0, withscores=True)
+                pipe.expire(rate_key, FORGOT_PASSWORD_WINDOW_SECONDS)
+                _, _, attempt_count, oldest_entries, _ = await pipe.execute()
+
+            if int(attempt_count) > FORGOT_PASSWORD_MAX_ATTEMPTS:
+                # Remove the rejected request so spam does not pollute the sliding window.
+                await self.redis.zrem(rate_key, member)
+                if oldest_entries:
+                    oldest_ts = float(oldest_entries[0][1])
+                    retry_after = min(
+                        FORGOT_PASSWORD_WINDOW_SECONDS,
+                        max(1, math.ceil(oldest_ts + FORGOT_PASSWORD_WINDOW_SECONDS - now)),
+                    )
+                else:
+                    retry_after = FORGOT_PASSWORD_WINDOW_SECONDS
+                raise TooManyRequestsException(
+                    "Too many password reset requests. "
+                    f"Please wait {retry_after} seconds before trying again.",
+                    details={"retryAfter": retry_after},
+                )
+        except RedisError as exc:
+            raise ServiceUnavailableException(
+                "Rate limit store is temporarily unavailable"
+            ) from exc
+
+        try:
+            # Block suspended or non-active accounts from triggering reset emails while keeping
+            # the response identical to active accounts to prevent account enumeration.
+            user = await self.user_repo.get_by_email(normalized_email)
+            if user is not None and user.status != "ACTIVE":
+                return ForgotPasswordResponse(email=normalized_email)
+
+            await self.cognito.forgot_password(normalized_email)
+        except (NotFoundException, ConflictException):
+            return ForgotPasswordResponse(email=normalized_email)
+        except TooManyRequestsException:
+            # Preserve the consumed Redis slot when Cognito itself throttles the request.
+            raise
+        except Exception:
+            try:
+                await self.redis.zrem(rate_key, member)
+            except RedisError as redis_exc:
+                # Never mask the original provider/DB error when Redis cleanup also fails.
+                logger.warning(
+                    "Failed to roll back forgot_password rate-limit entry: %s", redis_exc
+                )
+            raise
+
+        return ForgotPasswordResponse(email=normalized_email)
 
     @staticmethod
     def _ensure_active(user: User) -> None:

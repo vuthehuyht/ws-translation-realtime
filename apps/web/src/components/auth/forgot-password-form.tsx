@@ -3,11 +3,46 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Loader2 } from "lucide-react";
+import { ApiError } from "@/lib/api-client";
+import { forgotPassword } from "@/lib/auth-api";
 import { cn } from "@/lib/utils";
 
 interface ForgotPasswordFormProps {
   onSubmitSuccess?: (email: string) => void;
   className?: string;
+}
+
+function formatRetryAfter(seconds: number): string {
+  const totalSeconds = Math.max(1, Math.ceil(seconds));
+  if (totalSeconds < 60) {
+    return `${totalSeconds} giây`;
+  }
+  const minutes = Math.floor(totalSeconds / 60);
+  const remainingSeconds = totalSeconds % 60;
+  if (remainingSeconds === 0) {
+    return `${minutes} phút`;
+  }
+  return `${minutes} phút ${remainingSeconds} giây`;
+}
+
+function getApiErrorMessage(err: unknown): string {
+  if (err instanceof ApiError) {
+    if (err.status === 429) {
+      const details = err.details as { retryAfter?: unknown } | undefined;
+      if (typeof details?.retryAfter === "number" && details.retryAfter > 0) {
+        return `Bạn đã yêu cầu quá số lần cho phép. Vui lòng thử lại sau ${formatRetryAfter(details.retryAfter)}.`;
+      }
+      return "Bạn đã yêu cầu quá số lần cho phép. Vui lòng thử lại sau ít phút.";
+    }
+    if (err.status === 422) {
+      return "Địa chỉ email không hợp lệ (ví dụ: host@company.com)";
+    }
+    if (err.status >= 500) {
+      return "Hệ thống tạm thời bận. Vui lòng thử lại sau ít phút.";
+    }
+    return err.message;
+  }
+  return "Không thể kết nối tới máy chủ. Vui lòng thử lại.";
 }
 
 export function ForgotPasswordForm({
@@ -34,16 +69,21 @@ export function ForgotPasswordForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!validate()) {
+    if (isLoading || !validate()) {
       return;
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
     setIsLoading(true);
+    setError(undefined);
 
     try {
+      const response = await forgotPassword({ email: normalizedEmail });
       if (onSubmitSuccess) {
-        onSubmitSuccess(email.trim());
+        onSubmitSuccess(response.email);
       }
+    } catch (err) {
+      setError(getApiErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -85,6 +125,8 @@ export function ForgotPasswordForm({
             type="email"
             autoComplete="email"
             placeholder="host@company.com"
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? "forgot-password-error" : undefined}
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
@@ -99,7 +141,13 @@ export function ForgotPasswordForm({
             )}
           />
           {error && (
-            <p className="text-xs font-medium text-destructive">{error}</p>
+            <p
+              id="forgot-password-error"
+              role="alert"
+              className="text-xs font-medium text-destructive"
+            >
+              {error}
+            </p>
           )}
         </div>
 

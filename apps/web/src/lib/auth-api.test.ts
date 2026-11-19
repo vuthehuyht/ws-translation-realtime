@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "./api-client";
 import {
   confirmRegistration,
+  forgotPassword,
   loginHost,
   refreshHostSession,
   registerHost,
@@ -174,5 +175,73 @@ describe("auth-api", () => {
         credentials: "include",
       })
     );
+  });
+
+  it("calls POST /api/v1/auth/forgot-password and returns OTP_SENT payload", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          status: "OTP_SENT",
+          email: "host@example.com",
+          message:
+            "If an active account exists for this email, a password reset code has been sent.",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const res = await forgotPassword({ email: "host@example.com" });
+
+    expect(res.status).toBe("OTP_SENT");
+    expect(res.email).toBe("host@example.com");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:8000/api/v1/auth/forgot-password",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ email: "host@example.com" }),
+      })
+    );
+  });
+
+  it("throws ApiError with retryAfter on 429 forgot-password", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "RATE_LIMIT_EXCEEDED",
+            message: "Too many password reset requests.",
+            details: { retryAfter: 600 },
+          },
+        }),
+        { status: 429, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    await expect(forgotPassword({ email: "host@example.com" })).rejects.toMatchObject({
+      name: "ApiError",
+      status: 429,
+      code: "RATE_LIMIT_EXCEEDED",
+      details: { retryAfter: 600 },
+    });
+  });
+
+  it("throws ApiError on 503 forgot-password", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "SERVICE_UNAVAILABLE",
+            message: "Rate limit store is temporarily unavailable",
+          },
+        }),
+        { status: 503, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    await expect(forgotPassword({ email: "host@example.com" })).rejects.toMatchObject({
+      name: "ApiError",
+      status: 503,
+      code: "SERVICE_UNAVAILABLE",
+    });
   });
 });

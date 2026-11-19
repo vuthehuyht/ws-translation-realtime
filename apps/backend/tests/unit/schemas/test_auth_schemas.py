@@ -161,3 +161,31 @@ def test_register_response_serialization_and_aliases() -> None:
     resp2 = RegisterResponse(userId="sub-uuid-456", email="test2@example.com")
     assert resp2.user_sub == "sub-uuid-456"
     assert resp2.user_id == "sub-uuid-456"
+
+
+def test_forgot_password_request_normalizes_and_validates_email() -> None:
+    from app.schemas.requests import ForgotPasswordRequest
+
+    req = ForgotPasswordRequest(email="  Host.User+1@Example.COM  ")
+    assert req.email == "host.user+1@example.com"
+
+
+@pytest.mark.parametrize(
+    "bad_email",
+    ["", "   ", "not-an-email", "missing@domain", "@example.com"],
+)
+def test_forgot_password_request_rejects_invalid_emails(bad_email: str) -> None:
+    from app.schemas.requests import ForgotPasswordRequest
+
+    with pytest.raises(ValidationError):
+        ForgotPasswordRequest(email=bad_email)
+
+
+def test_forgot_password_response_defaults() -> None:
+    from app.schemas.responses import ForgotPasswordResponse
+
+    res = ForgotPasswordResponse(email="host@example.com")
+    assert res.status == "OTP_SENT"
+    assert res.email == "host@example.com"
+    assert "password reset code" in res.message.lower()
+

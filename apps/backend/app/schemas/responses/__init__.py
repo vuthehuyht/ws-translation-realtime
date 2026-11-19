@@ -2,6 +2,7 @@
 
 from app.schemas.responses.auth import (
     ConfirmResponse,
+    ForgotPasswordResponse,
     LoginResponse,
     RefreshResponse,
     RegisterResponse,
@@ -13,6 +14,7 @@ from app.schemas.responses.health import HealthResponse
 
 __all__ = [
     "ConfirmResponse",
+    "ForgotPasswordResponse",
     "HealthResponse",
     "LoginResponse",
     "RefreshResponse",

@@ -1,7 +1,7 @@
 """Cognito Integration: Amazon Cognito User Pool Host Authentication.
 
-Wraps SignUp, ConfirmSignUp, ResendConfirmationCode, InitiateAuth, and AdminGetUser
-with automatic offline mock support for local and test environments.
+Wraps SignUp, ConfirmSignUp, ResendConfirmationCode, ForgotPassword, InitiateAuth,
+and AdminGetUser with automatic offline mock support for local and test environments.
 """
 
 import logging
@@ -38,6 +38,7 @@ class CognitoUserRecord:
     full_name: str
     is_confirmed: bool = False
     confirmation_code: str = "123456"
+    reset_code: str | None = None
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,10 @@ class CognitoClient:
 
     async def resend_confirmation_code(self, email: str) -> dict[str, Any]:
         """Resend OTP code."""
+        raise NotImplementedError
+
+    async def forgot_password(self, email: str) -> dict[str, Any]:
+        """Initiate password reset OTP delivery via Cognito ForgotPassword."""
         raise NotImplementedError
 
     async def authenticate(self, email: str, password: str) -> dict[str, Any]:
@@ -136,6 +141,16 @@ class MockCognitoClient(CognitoClient):
         if user.is_confirmed:
             raise ConflictException("User is already confirmed")
         logger.info("Mock Cognito resend_confirmation_code (sub=%s)", user.sub)
+        return {"codeDeliveryDetails": {"Destination": email, "DeliveryMedium": "EMAIL"}}
+
+    async def forgot_password(self, email: str) -> dict[str, Any]:
+        user = self.users.get(email)
+        if not user:
+            raise NotFoundException("User not found")
+        if not user.is_confirmed:
+            raise ConflictException("Account is not eligible for password reset")
+        user.reset_code = "123456"
+        logger.info("Mock Cognito forgot_password (sub=%s)", user.sub)
         return {"codeDeliveryDetails": {"Destination": email, "DeliveryMedium": "EMAIL"}}
 
     async def authenticate(self, email: str, password: str) -> dict[str, Any]:
@@ -321,6 +336,37 @@ class AwsCognitoClient(CognitoClient):
                     ) from e
                 logger.error(
                     "Cognito resend_confirmation ClientError: %s - %s",
+                    error_code,
+                    error_msg,
+                )
+                raise BadGatewayException("Authentication provider error") from e
+
+    async def forgot_password(self, email: str) -> dict[str, Any]:
+        """Call AWS Cognito ForgotPassword API to send a 6-digit reset OTP."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                response = await client.forgot_password(
+                    ClientId=self.client_id,
+                    Username=email,
+                )
+                return {"codeDeliveryDetails": response.get("CodeDeliveryDetails", {})}
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code == "UserNotFoundException":
+                    raise NotFoundException("User not found") from e
+                if error_code in (
+                    "InvalidParameterException",
+                    "NotAuthorizedException",
+                    "UserNotConfirmedException",
+                ):
+                    raise ConflictException("Account is not eligible for password reset") from e
+                if error_code in ("LimitExceededException", "TooManyRequestsException"):
+                    raise TooManyRequestsException(
+                        "Too many password reset requests. Please try again later."
+                    ) from e
+                logger.error(
+                    "Cognito forgot_password ClientError: %s - %s",
                     error_code,
                     error_msg,
                 )

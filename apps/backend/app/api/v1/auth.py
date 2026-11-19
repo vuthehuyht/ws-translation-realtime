@@ -14,6 +14,7 @@ from app.core.exceptions import (
 )
 from app.schemas.requests import (
     ConfirmRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     LogoutRequest,
     RegisterRequest,
@@ -21,6 +22,7 @@ from app.schemas.requests import (
 )
 from app.schemas.responses import (
     ConfirmResponse,
+    ForgotPasswordResponse,
     LoginResponse,
     RefreshResponse,
     RegisterResponse,
@@ -133,6 +135,23 @@ async def resend_otp(
 ) -> ResendOtpResponse:
     """Resend confirmation OTP via Cognito with Redis rate limiting."""
     return await auth_service.resend_otp(payload)
+
+
+@router.post(
+    "/forgot-password",
+    response_model=ForgotPasswordResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Request a 6-digit password reset OTP via email",
+)
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    response: Response,
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+) -> ForgotPasswordResponse:
+    """Trigger Cognito ForgotPassword OTP delivery with a 3-per-15-minute Redis rate limit."""
+    result = await auth_service.forgot_password(payload)
+    _set_no_store_headers(response)
+    return result
 
 
 @router.post(
