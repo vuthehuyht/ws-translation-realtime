@@ -8,10 +8,11 @@ DO NOT read all specification files at once. Read ONLY the document relevant to 
 
 | When working on... | MUST read specification |
 | :--- | :--- |
-| Implementation Roadmap, 10 Execution Phases & Granular Task Breakdown (`TASK-DB-01` .. `TASK-HA-04`) | [implementation-tasks-roadmap.md](file:///D:/code/ws-translation-realtime/docs/tasks/implementation-tasks-roadmap.md) |
-| 10s micro-billing formula, Stripe/VietQR top-up, cost optimization rules (VAD, TTS), Host/Listener permissions | [01-business-requirements-and-billing.md](file:///D:/code/ws-translation-realtime/docs/specs/01-business-requirements-and-billing.md) |
-| Detailed business logic & Acceptance Criteria for all 38 features (`FR-101` .. `FR-604`) | [02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md) |
-| AWS Single-AZ architecture, Redis keys, 6 DynamoDB tables, Failover/Handover, Docker & GitHub Actions CI/CD | [03-system-architecture-and-techstack.md](file:///D:/code/ws-translation-realtime/docs/specs/03-system-architecture-and-techstack.md) |
+| Feature Epics & Sub-Epics Breakdown (`EPIC-01` .. `EPIC-09`, `EP01-S1` .. `EP09-S3`) & Current Status | [epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md) |
+| Implementation Roadmap, 10 Execution Phases & Granular Task Breakdown (`TASK-AUTH-01` .. `TASK-UI-11`) | [implementation-tasks-roadmap.md](file:///D:/code/ws-translation-realtime/docs/tasks/implementation-tasks-roadmap.md) |
+| 4 Fixed Plans, 3-Bucket Credit Wallet (`1 USD = 100 Cr`), Per-Second Billing, Entitlements, Stripe/VietQR, Host/Listener permissions | [01-business-requirements-and-billing.md](file:///D:/code/ws-translation-realtime/docs/specs/01-business-requirements-and-billing.md) |
+| Detailed business logic & Acceptance Criteria for all 42 features (`FR-101` .. `FR-604`) | [02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md) |
+| AWS Single-AZ architecture, Redis keys, 10 PostgreSQL tables, Failover/Handover, Terraform & GitHub Actions CI/CD | [03-system-architecture-and-techstack.md](file:///D:/code/ws-translation-realtime/docs/specs/03-system-architecture-and-techstack.md) |
 | Monorepo structure, REST API (`/api/v1/*`), WebSocket JSON payloads, S3 schemas (`master.json`, `summary.json`), 6 UI screens | [04-api-websocket-and-ui-specs.md](file:///D:/code/ws-translation-realtime/docs/specs/04-api-websocket-and-ui-specs.md) |
 
 ---
@@ -21,10 +22,10 @@ DO NOT read all specification files at once. Read ONLY the document relevant to 
 - **Frontend (`apps/web`)**: Next.js 15 (App Router, TypeScript, `output: "standalone"`), TailwindCSS, Shadcn UI, WebAudio (`AudioWorklet` + Silero VAD), AWS AppSync Events WebSocket Client.
 - **Backend (`apps/backend`)**: Python 3.12+, **FastAPI**, **Uvicorn (`uvloop` + `httptools`)**, **Pydantic v2**, package management via **`uv`**. Consolidates REST API (`/api/v1/*`), WebSocket Audio Ingest (`/ws/v1/*`), and Async Background Workers in a single unified service.
 - **Database & State**:
-  - **PostgreSQL 16 (Primary ACID Database)**: 9 relational tables (`users`, `user_profiles`, `wallets`, `payment_transactions`, `custom_vocabularies`, `promo_codes`, `promo_redemptions`, `rooms`, `room_transcripts` [metadata & S3 keys], `usage_ledger`). Handled via **SQLAlchemy 2.0 Async (`asyncpg`)** and **Alembic** migrations.
+  - **PostgreSQL 16 (Primary ACID Database)**: 10 relational tables (`users`, `user_profiles`, `wallets`, `payment_transactions`, `custom_vocabularies`, `promo_codes`, `promo_redemptions`, `rooms`, `room_transcripts` [metadata & S3 keys], `usage_ledger`). Handled via **SQLAlchemy 2.0 Async (`asyncpg`)** and **Alembic** migrations.
   - **ElastiCache for Redis (Single-AZ)**: 10s Audio Ring Buffer (`STREAM`), active TTS listener counter (`tts_count`), ephemeral live session transcript buffer.
   - **Amazon S3**: Permanent transcript package storage (`master.json`, `.txt`, `.srt`, `.vtt`, `.csv`), AI summaries (`summary.json`), and 24h TTS audio chunks (`.mp3`).
-- **AWS AI & Fan-out Pipeline**: Amazon Transcribe Streaming (STT) -> Amazon Translate (MT) -> Amazon Polly Neural (TTS) -> S3/CloudFront + AWS AppSync Events (Fan-out up to 1,000 listeners/room). On-demand meeting summaries use **Amazon Bedrock** (`Claude 3.5 Haiku` / `Nova Lite`).
+- **AWS AI & Fan-out Pipeline**: Amazon Transcribe Streaming (STT) -> Amazon Translate (MT) -> Multi-Provider Neural TTS (Amazon Polly primary + Azure AI Speech Neural `southeastasia` via `httpx.AsyncClient` for `vi-VN`, `th-TH`, `id-ID`) -> S3/CloudFront + AWS AppSync Events (Fan-out up to 1,000 listeners/room). On-demand meeting summaries use **Amazon Bedrock** (`Claude 3.5 Haiku` / `Nova Lite`).
 - **Deployment**: GitHub Actions (AWS OIDC) -> Build 2 separate Docker images (`web` & `backend`) -> Push to **Amazon ECR** -> Rolling deploy to 2 **Amazon ECS Fargate** services behind a single ALB in `ap-southeast-1a`.
 
 ---
@@ -50,7 +51,7 @@ ws-translation-realtime/
 │       │   ├── services/             # Business Logic (auth, rooms, billing, transcripts)
 │       │   ├── integrations/         # AWS Clients (Cognito, S3, Transcribe, Translate, Polly, Bedrock, AppSync)
 │       │   ├── ws/                   # Binary Audio Ingest, 500ms ACK, SIGTERM Handover
-│       │   └── workers/              # Asyncio tasks: 10s Micro-Billing & S3 Transcript Compiler
+│       │   └── workers/              # Asyncio tasks: Per-Second Credit Billing, Cron Sweep & S3 Transcript Compiler
 │       └── tests/                    # pytest + pytest-asyncio + mocks
 ├── infra/                            # Terraform Multi-Environment Stacks (dev, staging, prod)
 └── docker-compose.yml                # Local dev: web + backend + postgres + redis
@@ -80,8 +81,9 @@ ws-translation-realtime/
 ### 4.3. Cost Protection & Atomic Billing
 - **Demand-Driven TTS (`FR-305`)**: Only invoke Amazon Polly for language `lang` if `HGET room:{roomId}:tts_count {lang} > 0`.
 - **Partial Debounce (`FR-304`)**: Throttle `Partial` translations to at most once every `300ms` (or when $\ge 3$ new words are added).
-- **Idempotent Billing & Webhooks (`FR-502`, `FR-506`)**:
-  - Deduct 10s usage atomically via PostgreSQL transaction (`UPDATE wallets SET balance = balance - :cost ...` with `INSERT INTO usage_ledger`).
+- **Idempotent Billing, 3-Bucket Credit Deduction & Webhooks (`FR-502`, `FR-506`)**:
+  - Meter usage **per second** on Redis (1s tick) and flush atomically to PostgreSQL (`wallets` deducting strictly in order `promo_credits -> plan_credits -> topup_credits` with `INSERT INTO usage_ledger` every 15s and immediately on `PAUSE`/`END_ROOM`/`QUOTA_EXHAUSTED`, plus a session summary row in `credit_ledger`).
+  - Enforce feature gates via `EntitlementGuard` backed by `plans.entitlements` (Redis-cached).
   - Payment webhooks MUST verify `HMAC-SHA256` signatures and enforce PostgreSQL `payment_transactions.transaction_id` unique constraint to prevent double-crediting.
   - Exclude any audio frames or characters from billing metrics if an AWS AI service returns a `5xx` error.
 - **On-Demand AI Summary (`FR-407`)**: Only the Host can trigger `POST /api/v1/transcripts/{roomId}/summary`. Check `summary_status == "READY"` on PostgreSQL first; return cached `summary_s3_key` for free (`$0`) if present. Otherwise, invoke Bedrock once, save to S3 (90-day retention), update `room_transcripts`, and deduct the Host's wallet once.
@@ -129,7 +131,7 @@ docker build -t ws-translation/web:test ./apps/web
   - **Code Comments & Docstrings**: ALWAYS write in **English** (explain `WHY`, not `WHAT`).
   - **Code Identifiers**: Write all variables, functions, classes, filenames, API paths, and JSON/DB keys in **English** (`snake_case` for Python, `camelCase` / `PascalCase` for TypeScript and JSON).
 - **Git & Commit Conventions**:
-  - **Commit Messages**: ALWAYS write in **English** and strictly follow **Conventional Commits** (`<type>(<scope>): <subject>`, e.g., `feat(backend): add 10s micro-billing worker`, `fix(web): handle websocket handover event`, `docs(specs): update dynamodb schema`). Allowed types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`.
+  - **Commit Messages**: ALWAYS write in **English** and strictly follow **Conventional Commits** (`<type>(<scope>): <subject>`, e.g., `feat(backend): add per-second credit billing worker`, `fix(web): handle websocket handover event`, `docs(specs): update credit plans schema`). Allowed types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`.
   - **NO AI Attribution / Co-Author**: STRICTLY FORBIDDEN to add `Co-Authored-By:` trailers, AI signatures, or any "Generated with..." taglines to commit messages or pull requests.
   - **NEVER Commit Brainstorming or Implementation Plans**: Files under `docs/superpowers/`, `docs/plans/`, or any brainstorming/implementation plan artifacts MUST NEVER be staged or committed to Git.
   - **Explicit Trigger**: Never run `git commit` or `git push` unless explicitly instructed by the user. Never use `git add .` (stage specific files only).

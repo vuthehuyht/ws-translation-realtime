@@ -1,11 +1,12 @@
 # Tài liệu Nghiệp vụ & Cơ chế Tính phí (Business Requirements & Pay-as-you-go Billing)
 
 - **Mã tài liệu**: `DOC-01-BRD`
-- **Phiên bản**: `1.0`
-- **Ngày cập nhật**: 2026-11-09
+- **Phiên bản**: `2.1` (Hoàn thiện Unit Economics >= 55% Margin, Language/TTS Matrix `vi-VN`, Business KPIs, Non-Goals & Edge Cases vận hành)
+- **Ngày cập nhật**: 2026-11-19
 - **Tài liệu liên quan**:
   - [02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md)
   - [03-system-architecture-and-techstack.md](file:///D:/code/ws-translation-realtime/docs/specs/03-system-architecture-and-techstack.md)
+  - [epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md)
 
 ---
 
@@ -15,11 +16,22 @@ Nền tảng cung cấp dịch vụ **Dịch thuật giọng nói theo thời gi
 1. **Giao tiếp song phương (1-on-1 Bi-directional)**: Hai người bất đồng ngôn ngữ trò chuyện trực tiếp với nhau.
 2. **Hội thảo / Sự kiện đa ngôn ngữ (1-to-Many Broadcast)**: Một diễn giả (Speaker) phát biểu bằng ngôn ngữ gốc và hàng trăm tới hàng nghìn thính giả (Listeners) tiếp nhận nội dung dịch sang ngôn ngữ của họ (dưới dạng phụ đề chữ chạy trực tiếp và giọng đọc AI) ngay lập tức.
 
-### Chỉ số Mục tiêu Nghiệp vụ (Business KPIs & SLA):
+### Chỉ số Mục tiêu Kỹ thuật & Sản phẩm (Technical SLA & Business KPIs):
 - **Quy mô phòng tối đa**: Hỗ trợ từ `2` người (chế độ 1-1) đến `1.000` người nghe/phòng (chế độ Broadcast).
 - **Số ngôn ngữ dịch đồng thời**: Tối đa `10` ngôn ngữ đích trong cùng một phiên phát sóng.
-- **Độ trễ trải nghiệm**: Phụ đề tạm thời (`Partial`) hiển thị `< 500ms`, phụ đề chốt câu (`Final`) `< 800ms`, giọng đọc dịch (`TTS Audio`) phát ngay sau khi dứt câu `< 1.2s`.
+- **Độ trễ trải nghiệm (SLA)**: Phụ đề tạm thời (`Partial`) hiển thị `< 500ms`, phụ đề chốt câu (`Final`) `< 800ms`, giọng đọc dịch (`TTS Audio`) phát ngay sau khi dứt câu `< 1.2s`.
 - **Độ sẵn sàng (Availability)**: Cam kết không ngắt kết nối phòng dịch của người nghe và không mất nội dung đang nói khi hệ thống tự động mở rộng/thu hẹp (Auto-scaling) hoặc khi một tiến trình xử lý gặp sự cố.
+- **Chỉ số Kinh doanh (Product KPIs)**:
+  - **Gross Margin mục tiêu**: `>= 55% – 65%` sau phí cổng thanh toán và hạ tầng cố định.
+  - **Activation Rate**: `>= 40%` Host mới mở phòng dịch thành công đầu tiên trong 7 ngày sau đăng ký.
+  - **Free-to-Paid Conversion**: `>= 8%` tài khoản `FREE` nâng lên gói trả phí hoặc mua Top-up trong 30 ngày.
+  - **Monthly Retention (D30)**: `>= 75%` thuê bao trả phí gia hạn tháng tiếp theo.
+
+### Phạm vi Ngoài Mục tiêu v1 (Non-Goals / Out of Scope):
+- Chưa phát triển Native Mobile App (iOS/Android) — Người nghe sử dụng trình duyệt Web Mobile-first (`/r/[roomCode]`).
+- Chưa hỗ trợ truyền tải Video / Screen-sharing (chỉ tập trung luồng âm thanh & phụ đề).
+- Chưa xây dựng bot tự động tham gia Zoom / Google Meet / Microsoft Teams ở giai đoạn v1.
+- Chưa hỗ trợ chế độ dịch Offline không có kết nối Internet.
 
 ---
 
@@ -42,15 +54,15 @@ Nền tảng cung cấp dịch vụ **Dịch thuật giọng nói theo thời gi
 sequenceDiagram
     actor H as Host (Chủ phòng)
     participant Cognito as Amazon Cognito
-    participant API as Backend API & Lambda
+    participant API as FastAPI Backend API
     participant PG as Cổng Thanh toán (Stripe / VietQR)
     participant DB as PostgreSQL & Redis
 
     H->>Cognito: 1. Đăng ký tài khoản (Email/Password hoặc Google SSO)
     Cognito-->>H: Gửi mã xác thực OTP qua Email
-    H->>Cognito: 2. Nhập OTP xác nhận tài khoản
-    Cognito->>API: 3. Kích hoạt Post-Confirmation Trigger
-    API->>DB: Tự động tạo Hồ sơ User + Ví điện tử (Balance = $0.00)
+    H->>API: 2. Nhập OTP xác nhận tài khoản (`POST /api/v1/auth/confirm`)
+    API->>Cognito: 3. Gọi ConfirmSignUp xác thực OTP
+    API->>DB: Tự động tạo Hồ sơ User + Ví điện tử (Welcome Bonus = $2.00)
     H->>API: 4. Tạo lệnh Nạp tiền (ví dụ: Nạp $50 qua Thẻ/QR)
     API->>PG: Khởi tạo Payment Intent / Mã VietQR (tx_id)
     PG-->>H: Hiển thị trang thanh toán / Mã QR
@@ -94,7 +106,7 @@ sequenceDiagram
     H->>Sys: 4. Phát biểu bằng Tiếng Anh
     Sys->>L1: 5a. Đẩy phụ đề VI + Phát giọng đọc TTS Tiếng Việt
     Sys->>L2: 5b. Chỉ đẩy phụ đề KO (Không gọi AI tạo giọng đọc KO để tiết kiệm phí cho Host)
-    Sys->>H: 6. Cập nhật chi phí tiêu thụ mỗi 10 giây trên bảng điều khiển của Host
+    Sys->>H: 6. Cập nhật số dư Credit & Burn Rate mỗi giây trên bảng điều khiển của Host
 ```
 
 ---
@@ -113,67 +125,95 @@ sequenceDiagram
 
 ---
 
-## 5. Mô hình Tính phí Pay-as-you-go (Metering & Billing Specification)
+## 5. Mô hình Gói Dịch vụ, Ví Credit 3 Ngăn & Tính cước Theo Từng Giây (Plans, Credits & Per-Second Billing)
 
-### 5.1. Nguyên tắc Ghi nhận và Trừ cước
+### 5.1. Đơn vị Credit, 4 Gói Subscription Cố định & Gói Top-up Lẻ
+- **Đơn vị tính phí**: **Credit (`Cr`)** với tỷ lệ quy đổi chuẩn **`1 USD = 100 Credits`** (`1 Cr = $0.01`, lưu độ chính xác `0.01 Cr`).
+- **Welcome Bonus tài khoản mới**: Tặng **`200 Credits`** (ngăn Promo, hạn 30 ngày) và gán mặc định gói `FREE` ngay khi xác thực OTP.
+- **4 Gói Subscription cố định theo tháng** (quyết định quyền lợi `entitlements` và số Credit tặng mỗi chu kỳ):
+
+| Gói | Giá / tháng | Credit tháng (`plan_credits`) | Bonus Top-up lẻ | Chế độ & Hạn mức chính | Tính năng nổi bật mở rộng theo gói |
+| :--- | :---: | :---: | :---: | :--- | :--- |
+| **FREE** | `$0` | `0 Cr` *(+200 Cr 1 lần)* | `+0%` | `1-on-1`, 1 ngôn ngữ, 2 người, 1 phòng đồng thời *(tối đa 15p/phòng)* | Phụ đề realtime, xem biên bản online 7 ngày |
+| **PRO** | `$19` | `1.800 Cr` | `+5%` | `1-on-1` & `Broadcast`, 3 ngôn ngữ, 100 người, 1 phòng đồng thời | + TTS mặc định, Passcode, Lên lịch phòng (`Scheduled Room`), Lọc từ nhạy cảm (`Profanity Masking`), 2 bộ từ điển (50 từ), Export `.txt/.md` (30 ngày), AI Summary ngôn ngữ gốc, Auto Degrade TTS |
+| **BUSINESS** | `$59` | `6.000 Cr` | `+10%` | `1-on-1` & `Broadcast`, 6 ngôn ngữ, 300 người, **3 phòng đồng thời** | + Chọn giọng TTS Nam/Nữ, tối đa 3 Speakers (Co-Host), Custom Logo/Màu phòng nghe, 10 bộ từ điển (256 từ), Export full `.txt/.md/.srt/.vtt/.csv` (90 ngày) + Listener Download, AI Summary đa ngôn ngữ, Session Analytics (CSV), Auto Top-up & Hóa đơn VAT |
+| **ENTERPRISE** | `$199` | `21.000 Cr` | `+15%` | `1-on-1` & `Broadcast`, 10 ngôn ngữ, 1.000 người, **10 phòng đồng thời** | + Full White-label (ẩn watermark), tối đa 10 Speakers, Từ điển không giới hạn + Import CSV, lưu biên bản 365 ngày, Session Analytics PDF |
+
+- **3 Gói Nạp Credit Lẻ cố định (`credit_packs` — Không hết hạn)**:
+  - `PACK_S`: `$10` -> `1.000 Cr` (+ `% Bonus` theo gói đang sở hữu)
+  - `PACK_M`: `$30` -> `3.000 Cr` (+ `% Bonus` theo gói đang sở hữu)
+  - `PACK_L`: `$100` -> `10.000 Cr` (+ `% Bonus` theo gói đang sở hữu)
+- **Quy tắc Nâng/Hạ gói, Grace Period & Gia hạn VietQR**:
+  - **Upgrade**: Thanh toán giá cố định gói mới (Stripe hoặc VietQR) -> kích hoạt chu kỳ 30 ngày mới ngay lập tức, mở khóa `entitlements` và cấp trọn `plan_credits` gói mới.
+  - **Downgrade / Hủy gia hạn**: Giữ quyền lợi đến hết chu kỳ hiện tại; khi hết kỳ chuyển về gói mới, `plan_credits` dư về `0`, **bảo toàn 100% `topup_credits`**.
+  - **Stripe `PAST_DUE` Grace Period**: Nếu gia hạn thẻ thất bại, giữ quyền gói trong **3 ngày ân hạn** (gửi email cảnh báo + retry tự động); quá 3 ngày không thành công mới chuyển về `FREE`.
+  - **Nhắc gia hạn VietQR**: Vì VietQR không tự thu tiền định kỳ, hệ thống gửi Email & In-app nhắc gia hạn trước **7 ngày, 3 ngày và 1 ngày** trước `current_period_end`.
+- **Chống lạm dụng gói `FREE` (Anti-Abuse)**: Chặn domain email dùng một lần (disposable email blocklist), giới hạn đăng ký theo IP, giới hạn tối đa `15 phút/phòng` và `1` phòng đồng thời cho tài khoản `FREE`.
+
+### 5.2. Luật 3 Ngăn Credit & Công thức Tính cước Theo Từng Giây (Per-Second Billing)
 - **Đối tượng trả phí**: Duy nhất **Host** (chủ phòng).
-- **Chu kỳ chốt cước vi mô (Micro-billing Cycle)**: Mỗi **10 giây** một lần trong suốt thời gian phòng đang ở trạng thái `ACTIVE`.
-- **Đơn vị đo lường gốc (Raw Metering Metrics)**:
-  1. `audio_input_seconds`: Tổng số giây âm thanh có giọng nói thực tế từ Speaker.
-  2. `translated_chars`: Tổng số ký tự được dịch sang các ngôn ngữ đích (bao gồm cả Partial và Final).
-  3. `tts_chars`: Tổng số ký tự được chuyển thành giọng nói ở các ngôn ngữ có người nghe bật Audio.
-  4. `listener_connection_minutes`: Tổng số phút kết nối của toàn bộ người nghe trong phòng (quy đổi từ tổng số người nghe đang online trong mỗi chu kỳ 10 giây).
+- **3 ngăn Credit & Thứ tự trừ ưu tiên** (`total_credits = promo_credits + plan_credits + topup_credits`):
+  1. `promo_credits` (Welcome Bonus, Voucher — có hạn dùng) -> trừ trước.
+  2. `plan_credits` (Credit theo gói tháng — reset cuối chu kỳ) -> trừ thứ hai.
+  3. `topup_credits` (Credit mua từ `PACK_S/M/L` hoặc Auto Top-up — không hết hạn) -> trừ sau cùng.
+- **Tính cước chính xác từng giây thực tế (Không làm tròn block 10 giây)**:
+  - Đo & trừ realtime mỗi **1 giây** trên Redis (`wallet:{hostId}:credits`, xử lý nguyên tử qua Lua script để hỗ trợ nhiều phòng chạy song song không bao giờ âm), flush nguyên tử xuống PostgreSQL (`wallets` + `usage_ledger`) định kỳ mỗi **15 giây** và **ngay lập tức** khi `PAUSE` / `END_ROOM` / `QUOTA_EXHAUSTED`.
 
-### 5.2. Công thức Tính phí cho Host
+$$\text{Credits} = \left(\frac{S_{\text{audio}}}{60} \times R_{\text{stt}}\right) + \left(\frac{C_{\text{mt}}}{1000} \times R_{\text{mt}}\right) + \left(\frac{C_{\text{tts}}}{1000} \times R_{\text{tts}}\right) + \left(\frac{S_{\text{listener}}}{6000} \times R_{\text{listener\_100/phút}}\right)$$
 
-Trong mỗi chu kỳ 10 giây ($t$), số tiền khấu trừ vào ví của Host ($\Delta \text{Cost}_t$) được tính bằng công thức:
-
-$$\Delta \text{Cost}_t = \left( S_{\text{audio}} \times P_{\text{stt}} \right) + \left( C_{\text{mt}} \times P_{\text{mt}} \right) + \left( C_{\text{tts}} \times P_{\text{tts}} \right) + \left( N_{\text{listeners}} \times \frac{10}{60} \times P_{\text{listener\_min}} \right)$$
-
-| Ký hiệu | Ý nghĩa | Đơn giá AWS COGS tham khảo (Giá vốn) | Gợi ý Đơn giá bán lẻ (Retail Price) |
+| Ký hiệu | Ý nghĩa | AWS COGS tham khảo | Đơn giá bán lẻ mặc định (Credits) |
 | :--- | :--- | :--- | :--- |
-| $S_{\text{audio}}$ | Số giây âm thanh đầu vào trong 10s | $\$0.00040 / \text{giây}$ ($\$0.024/\text{phút}$) | Cấu hình theo gói cước hệ thống |
-| $C_{\text{mt}}$ | Số ký tự dịch máy phát sinh trong 10s | $\$0.000015 / \text{ký tự}$ ($\$15 / 1\text{M ký tự}$) | Cấu hình theo gói cước hệ thống |
-| $C_{\text{tts}}$ | Số ký tự tổng hợp giọng đọc Neural trong 10s | $\$0.000016 / \text{ký tự}$ ($\$16 / 1\text{M ký tự}$) | Cấu hình theo gói cước hệ thống |
-| $N_{\text{listeners}}$ | Số lượng người nghe đồng thời trong phòng | $\approx \$0.00002 / \text{người/phút}$ (AppSync + CDN) | Cấu hình theo bậc thang mỗi 100 người |
-| $C_{\text{summary}}$ | Phí **AI Tóm tắt Nội dung** (On-Demand 1 lần/phòng) | $\approx \$0.005 - \$0.02 / \text{buổi họp}$ (Amazon Bedrock) | Chỉ trừ 1 lần duy nhất khi Host bấm nút *"Tóm tắt AI"*; các lần xem lại sau hoàn toàn miễn phí (`$0`) |
+| $S_{\text{audio}}$ | Số **giây thực tế** có tiếng nói (`vad_flag = 1`, bước `0.1s`) | `$0.024 / phút` | **`5.5 Cr / phút`** (Khoảng lặng = `0 Cr`, Margin ~56%) |
+| $C_{\text{mt}}$ | Số ký tự dịch máy phát sinh | `$0.015 / 1k ký tự` | **`3.5 Cr / 1.000 ký tự`** (Margin ~57%) |
+| $C_{\text{tts}}$ | Số ký tự tổng hợp giọng đọc Neural (`tts_count > 0`) | `$0.016 / 1k ký tự` | **`4.0 Cr / 1.000 ký tự`** (Margin ~60%) |
+| $S_{\text{listener}}$ | Tổng **người-giây** kết nối thực tế | `~$0.002 / 100 người / phút` | **`0.5 Cr / 100 người / phút`** |
+| $C_{\text{summary}}$ | Phí **AI Tóm tắt Nội dung** (On-Demand 1 lần/phòng) | `~$0.01 - $0.02 / phòng` | **`15 Cr`** (`PRO`) / **`25 Cr`** (`BUSINESS+`); xem lại từ cache = **`0 Cr`** |
 
-> **Chế độ Hiển thị Đơn giản hóa cho Host**: Trên giao diện người dùng, hệ thống quy đổi công thức trên thành **"Chi phí ước tính mỗi phút (Burn Rate $/phút)"** dựa trên cấu hình hiện tại của phòng để Host dễ theo dõi (ví dụ: *"Phòng đang mở 5 ngôn ngữ, 350 người nghe — Tốc độ tiêu thụ: $0.18/phút"*).
+> **Minh bạch chế độ `1-on-1` & Hiển thị Burn Rate**:
+> - Trên giao diện, hệ thống quy đổi sang **Tốc độ tiêu thụ (`Burn Rate Cr/phút`)** và **Số phút còn lại ước tính** cập nhật từng giây.
+> - Riêng chế độ **`1-on-1` Full-duplex** có **2 người nói đồng thời (2 luồng STT + MT)** -> UI phải hiển thị rõ Burn Rate tính cho cả 2 chiều nói (Host là người chịu toàn bộ chi phí phòng).
 
-### 5.3. Quy trình Kiểm soát Hạn mức & Xử lý Cạn ví (Quota Exhaustion Workflow)
+### 5.3. Quy trình Kiểm soát Hạn mức & Xử lý Cạn Credit (Quota Exhaustion Workflow)
 
-| Ngưỡng số dư ví (Tính theo Burn Rate hiện tại) | Trạng thái Hệ thống | Hành động Nghiệp vụ |
+| Ngưỡng số dư Credit (Tính theo Burn Rate hiện tại) | Trạng thái Hệ thống | Hành động Nghiệp vụ |
 | :--- | :--- | :--- |
-| **Trước khi mở phòng** | Kiểm tra điều kiện (`Pre-check`) | Yêu cầu số dư tối thiểu đủ cho **10 phút** hoạt động theo cấu hình ngôn ngữ đã chọn. Nếu không đủ -> Chặn mở phòng, yêu cầu nạp thêm. |
-| **Còn đủ `< 5 phút`** | Cảnh báo sớm (`LOW_BALANCE_WARNING`) | Hiển thị banner cảnh báo cho riêng Host kèm nút nạp nhanh (Top-up) hoặc gợi ý tắt bớt ngôn ngữ không cần thiết. Người nghe không nhìn thấy cảnh báo này. |
-| **Còn đủ `< 1 phút`** | Hạ cấp mềm (`GRACEFUL_DEGRADATION`) | Nếu Host bật cấu hình *"Tự động tiết kiệm khi sắp hết tiền"*, hệ thống tự động tắt tính năng phát giọng đọc TTS (chỉ giữ lại dịch phụ đề chữ) để kéo dài thời gian hội thảo thêm ~40%. |
-| **Số dư `= $0.00`** | Đóng phiên an toàn (`QUOTA_EXHAUSTED`) | Chốt câu dịch cuối cùng đang xử lý, gửi thông báo kết thúc phiên lịch sự tới toàn bộ người nghe, đóng phòng và xuất hóa đơn chi tiết cho Host. |
+| **Trước khi mở phòng** | Kiểm tra điều kiện (`Pre-check`) | Kiểm tra `EntitlementGuard` theo gói + yêu cầu `total_credits` đủ cho **10 phút** ước tính. Không đủ -> Chặn mở phòng (`402`), gợi ý mua Top-up Pack. |
+| **Còn đủ `< 5 phút`** | Cảnh báo sớm (`LOW_BALANCE_WARNING`) | Hiển thị banner cảnh báo riêng Host kèm popup mua nhanh `PACK_S/M/L` ngay trong phòng (In-room Quick Top-up). |
+| **Còn đủ `< 1 phút`** | Hạ cấp mềm (`GRACEFUL_DEGRADATION`) | Nếu gói có quyền `allowAutoDegradeTts` và Host bật -> tự tắt TTS (chỉ giữ dịch phụ đề chữ) để kéo dài thời gian hội thảo. |
+| **Số dư `= 0.00 Cr`** | Đóng phiên an toàn (`QUOTA_EXHAUSTED`) | Chốt câu dịch cuối đang xử lý, flush chính xác phần giây lẻ cuối cùng, đóng phòng an toàn và tổng hợp biên bản S3. |
 
-### 5.4. Cơ chế Nạp tiền, Thanh toán & Tự động Nạp (Top-up & Payment Handling)
+### 5.4. Cơ chế Thanh toán, Tự động Nạp & 2 Sổ Lịch sử Tài chính
 
 1. **Phương thức Thanh toán Hỗ trợ**:
-   - **Quốc tế (Stripe)**: Hỗ trợ thẻ Visa, Mastercard, American Express, Apple Pay, Google Pay (hỗ trợ lưu thẻ Tokenized phục vụ Auto Top-up).
-   - **Nội địa (VietQR / VNPay / SePay)**: Sinh mã QR chuyển khoản ngân hàng tự động chứa nội dung định danh giao dịch (`tx_id`), tự động khớp lệnh qua Webhook trong `< 5 giây` sau khi chuyển khoản.
-2. **Nạp tiền Trực tiếp Ngay Trong Phòng (In-Room Live Top-up)**:
-   - Khi đang diễn ra hội thảo mà nhận cảnh báo sắp hết tiền (`< 5 phút`), Host có thể bấm nút **"Nạp nhanh"** ngay trên thanh điều khiển hoặc quét mã QR trên điện thoại mà không làm gián đoạn luồng thu âm.
-   - Ngay khi Webhook thanh toán báo thành công, hệ thống cộng thẳng số tiền mới vào cả **PostgreSQL** và bộ nhớ đệm **Redis (`wallet:{hostId}:balance`)** để kéo dài thời gian phòng tức thì.
-3. **Tự động Nạp tiền khi Chạm ngưỡng (Auto Top-up)**:
-   - Host có thể liên kết thẻ thanh toán và bật cấu hình: *"Tự động nạp thêm `$20` khi số dư khả dụng xuống dưới `$5`"*.
-   - Tiến trình Billing khi phát hiện số dư sau khấu trừ xuống dưới `$5` sẽ tự động kích hoạt giao dịch thu tiền ngầm (Off-session Charge) để hội thảo không bao giờ bị ngắt giữa chừng.
-4. **Đảm bảo Toàn vẹn Giao dịch (Idempotency & Reconciliation)**:
-   - Mọi Webhook từ cổng thanh toán đều được kiểm tra chữ ký điện tử (`HMAC-SHA256`) và khóa chống trùng lặp theo `tx_id` (đảm bảo nếu cổng thanh toán gọi lại Webhook nhiều lần do lỗi mạng thì ví của Host chỉ được cộng tiền đúng 1 lần duy nhất).
+   - **Quốc tế (Stripe)**: Hỗ trợ Subscription hàng tháng, mua gói Top-up `PACK_S/M/L` và lưu thẻ Tokenized phục vụ Auto Top-up (`BUSINESS+`).
+   - **Nội địa (VietQR / VNPay / SePay)**: Sinh mã QR cố định theo giá gói Subscription (chu kỳ 30 ngày) hoặc Top-up Pack, khớp lệnh tự động qua Webhook `< 5 giây`.
+2. **Nạp nhanh trong phòng & Auto Top-up**:
+   - Cộng trực tiếp vào `topup_credits` (PostgreSQL + Redis) không làm gián đoạn luồng thu âm.
+   - Auto Top-up (`BUSINESS+`): Khi `total_credits < auto_topup_threshold_credits`, tự động charge thẻ mua gói `auto_topup_pack_id` (kèm Redis lock chống trùng).
+3. **Minh bạch với 2 Sổ Lịch sử tách biệt**:
+   - **Lịch sử Nạp tiền & Mua gói (`payment_transactions`)**: Theo dõi mọi giao dịch Subscription, Top-up Pack (+ bonus), Promo Credit, Refund và tải hóa đơn PDF VAT.
+   - **Lịch sử Sử dụng Credit (`credit_ledger` + Drill-down `usage_ledger`)**: Hiển thị gọn từng phiên phòng, AI Summary, Credit hết hạn (kèm chi tiết trừ từ ngăn `Promo / Plan / Top-up`) và cho phép bấm xem chi tiết bóc tách theo từng giây + xuất CSV.
+4. **Đảm bảo Toàn vẹn Giao dịch (Idempotency)**: Mọi Webhook kiểm tra `HMAC-SHA256` và khóa dòng PostgreSQL theo `transaction_id` UNIQUE.
 
 ---
 
-## 6. Yêu cầu Phi chức năng về Nghiệp vụ (Business Non-Functional Requirements)
+## 6. Yêu cầu Phi chức năng, Ngôn ngữ Hỗ trợ, Thông báo & Quyền riêng tư
 
 1. **Tính minh bạch & Đối soát (Auditability)**:
-   - Mọi chu kỳ trừ tiền 10 giây đều phải lưu vết vào sổ cái (`Usage Ledger`) kèm thông tin chi tiết: Mã phòng, thời gian, số giây nói, số ký tự từng ngôn ngữ, số người nghe để Host có thể tải báo cáo CSV/PDF sau buổi hội thảo.
+   - Mọi cửa sổ flush theo từng giây đều lưu vết bất biến vào `usage_ledger` và tổng hợp từng phiên vào `credit_ledger` (kèm `deducted_breakdown` 3 ngăn `Promo / Plan / Top-up`) để Host đối soát & xuất báo cáo CSV/PDF.
 2. **Không tính phí khi lỗi hệ thống**:
-   - Nếu xảy ra lỗi từ phía dịch vụ AI của AWS (ví dụ: Transcribe hoặc Translate trả về lỗi 5xx), các frame âm thanh/ký tự bị lỗi đó **tuyệt đối không được cộng vào bộ đếm tính phí** của Host.
-3. **Bảo mật nội dung & Chính sách Lưu trữ Biên bản Hội thảo (Retention Policy)**:
-   - **File âm thanh (Audio Chunks)**: Các đoạn ghi âm tạm thời và file âm thanh TTS (`.mp3`/`.ogg`) chỉ phục vụ phát trực tiếp và tự động xóa hoàn toàn khỏi S3 sau **24 giờ**.
-   - **Lịch sử & Biên bản Bản dịch (Transcripts)**:
-     - **Lưu trữ phiên trực tiếp (Trên Redis)**: Phục vụ người nghe vào phòng muộn hoặc tải lại trang (F5) có thể xem ngay toàn bộ lịch sử phụ đề từ đầu buổi họp thông qua bộ nhớ đệm Redis của phòng.
-     - **Lưu trữ tổng hợp (90 ngày trên Amazon S3 & Metadata trên PostgreSQL)**: Ngay khi kết thúc phòng, hệ thống tự động tổng hợp toàn bộ bản dịch thành bộ file chuẩn (`master.json`, `.txt`, `.srt`, `.vtt`, `.csv`) lưu trên S3 trong **90 ngày** (sau 90 ngày S3 Lifecycle tự động xóa vĩnh viễn), đồng thời lưu khóa định danh S3 Key vào bảng `room_transcripts` trên PostgreSQL.
-     - **Phân quyền tải xuống**: Host luôn có toàn quyền tải xuống từ Dashboard; Listener chỉ được tải nếu Host bật tùy chọn `allowListenerDownload = true` cho phòng đó.
+   - Nếu xảy ra lỗi `5xx` từ phía dịch vụ AI (Transcribe / Translate / TTS), các frame âm thanh/ký tự bị lỗi đó **tuyệt đối không được cộng vào bộ đếm trừ Credit** (`0 Cr`).
+3. **Ma trận Ngôn ngữ Hỗ trợ & Chiến lược TTS Tiếng Việt (`Language Support Matrix`)**:
+   - **STT (Amazon Transcribe Streaming) & MT (Amazon Translate)**: Hỗ trợ đầy đủ nhóm ngôn ngữ chủ lực (`vi-VN`, `en-US`, `en-GB`, `ja-JP`, `ko-KR`, `zh-CN`, `fr-FR`, `de-DE`, `es-ES`, `th-TH`, `id-ID`).
+   - **TTS (Multi-Provider Adapter — đồng giá `$16 / 1M ký tự`)**:
+     - **Primary (Amazon Polly Neural)**: `en-US`, `en-GB`, `ja-JP`, `ko-KR`, `zh-CN`, `fr-FR`, `de-DE`, `es-ES`.
+     - **Azure AI Speech Neural (`southeastasia` Singapore, `< 5ms` RTT từ AWS `ap-southeast-1`)**: Phục vụ các ngôn ngữ Amazon Polly chưa hỗ trợ giọng đọc gồm **Tiếng Việt (`vi-VN`: `vi-VN-HoaiMyNeural` Nữ / `vi-VN-NamMinhNeural` Nam)**, Tiếng Thái (`th-TH`), Tiếng Indonesia (`id-ID`). Nếu lỗi `5xx`/timeout hoặc chưa cấu hình key, hệ thống không trừ Credit (`0 Cr`) và tự hạ về chế độ `Text-only` gắn nhãn rõ trên giao diện Người nghe.
+4. **Chính sách Lưu trữ Biên bản & Xử lý khi Downgrade (Retention Policy)**:
+   - **File âm thanh TTS (`.mp3`/`.ogg`)**: Lưu tạm trên S3 và tự động xóa sau **24 giờ**.
+   - **Biên bản Bản dịch & AI Summary trên S3**: Lưu theo gói tại thời điểm kết thúc phòng (`FREE`: 7 ngày, `PRO`: 30 ngày, `BUSINESS`: 90 ngày, `ENTERPRISE`: 365 ngày) dựa trên cột `room_transcripts.expires_at`. Khi Host hạ gói, các biên bản cũ **không bị xóa đột ngột** và được cấp **14 ngày ân hạn** để tải về.
+   - **Phân quyền tải xuống**: Host luôn được tải theo `exportFormats` của gói; Listener chỉ được tải nếu Host thuộc gói `BUSINESS+` và bật `allowListenerDownload = true`.
+5. **Ma trận Thông báo Nghiệp vụ (Notification Matrix — Amazon SES & In-App)**:
+   - Gửi thông báo tự động cho 8 sự kiện: (1) OTP/Reset mật khẩu, (2) Thanh toán gói/Top-up thành công kèm PDF, (3) Nhắc gia hạn VietQR trước `7 / 3 / 1 ngày`, (4) Gia hạn Stripe lỗi (`PAST_DUE` — Grace Period 3 ngày), (5) Auto Top-up lỗi thẻ, (6) Promo Credit sắp hết hạn trước `3 ngày`, (7) Biên bản S3 sẵn sàng, (8) AI Summary sẵn sàng.
+6. **Quyền riêng tư, Thông báo Thu âm & Xóa dữ liệu (Privacy & GDPR/PDPA)**:
+   - Màn hình Người nghe (`SCR-04`) và khách `1-on-1` luôn hiển thị banner minh bạch *"Phiên này đang được phiên dịch & lưu biên bản AI"*.
+   - Host có quyền chủ động xóa biên bản của từng phòng (`DELETE /api/v1/rooms/{id}/transcripts`) hoặc yêu cầu xóa toàn bộ tài khoản & dữ liệu cá nhân (`DELETE /api/v1/users/me`).

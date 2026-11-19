@@ -1,11 +1,12 @@
 # Thiết kế Kiến trúc Hệ thống, HA/Zero-Downtime & Tech Stack (System Architecture & Technical Design)
 
 - **Mã tài liệu**: `DOC-03-SAD`
-- **Phiên bản**: `1.0`
-- **Ngày cập nhật**: 2026-11-09
+- **Phiên bản**: `2.1` (Bổ sung Multi-Provider TTS `vi-VN`, Per-Second Metering + 15s ACID Flush, Entitlements Cache & SES Notification Worker)
+- **Ngày cập nhật**: 2026-11-19
 - **Tài liệu liên quan**:
   - [01-business-requirements-and-billing.md](file:///D:/code/ws-translation-realtime/docs/specs/01-business-requirements-and-billing.md)
   - [02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md)
+  - [epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md)
 
 ---
 
@@ -49,13 +50,13 @@ flowchart TB
     subgraph AWS_AI["Tầng AWS Native AI Pipeline"]
         Transcribe["Amazon Transcribe Streaming\n(HTTP/2 Bi-directional Stream)"]
         Translate["Amazon Translate\n(Parallel N-Language MT)"]
-        Polly["Amazon Polly Neural\n(Demand-Driven TTS)"]
+        Polly["Multi-Provider Neural TTS\nAmazon Polly (Primary)\n+ Azure AI Speech southeastasia (vi-VN, th-TH, id-ID)"]
         Bedrock["Amazon Bedrock\n(Claude 3.5 Haiku / Nova Lite)\nOn-Demand AI Meeting Summary"]
     end
 
     subgraph Data_Storage["Tầng Persistent Data & Auth"]
-        Cognito["Amazon Cognito\n(Host User Pool)"]
-        DynamoDB[("Amazon DynamoDB (On-Demand)\nUsers, Wallets, Payments,\nRooms, RoomTranscripts, UsageLedger")]
+        Cognito["Amazon Cognito\n(Host User Pool + JWKS RS256)"]
+        Postgres[("Amazon RDS PostgreSQL 16\n(10 bảng ACID: users, user_profiles,\nwallets, payment_transactions, promo_codes,\npromo_redemptions, custom_vocabularies,\nrooms, room_transcripts, usage_ledger)")]
     end
 
     %% Luồng Ingest & Web
@@ -73,7 +74,7 @@ flowchart TB
     Task1 == "4. Translate N Langs" ==> Translate
     Task1 == "5. Synthesize Speech" ==> Polly
     Task1 -- "6a. PutObject (.mp3 / Exports)" --> CDN
-    Task1 -. "6c. Async Put Final Segment / Billing" .-> DynamoDB
+    Task1 -. "6c. Asyncpg ACID Ledger / Billing" .-> Postgres
     Task1 -. "7. Generate AI Summary" .-> Bedrock
 
     %% Luồng Fan-out
@@ -145,123 +146,107 @@ Speaker Client gửi các frame âm thanh mỗi `100ms` (PCM 16kHz, 16-bit, Mono
 | `room:{roomId}:audio_buffer` | `STREAM` | 60s | Lưu cuốn chiếu tối đa `100` entries gần nhất (`MAXLEN ~ 100`, tương ứng 10 giây âm thanh) gồm `seq_id`, `timestamp`, `pcm_bytes` để phục vụ Hot-Failover. |
 | `room:{roomId}:checkpoint` | `HASH` | 12h | Lưu `last_received_seq` và `last_committed_seq` (mốc frame của câu `Final` gần nhất đã dịch xong). |
 | `room:{roomId}:tts_count` | `HASH` | 12h | Lưu số người nghe đang bật loa theo từng ngôn ngữ (ví dụ: `{"en-US": 42, "ja-JP": 15, "ko-KR": 0}`). Worker đọc key này trước khi gọi Polly. |
-| `wallet:{hostId}:balance` | `STRING` (Float) | 24h | Số dư ví theo thời gian thực của Host, được trừ nguyên tử bằng lệnh `INCRBYFLOAT` mỗi 10 giây. |
+| `host:{hostId}:entitlements` | `STRING` (JSON) | 15m | Cache `planCode` và object `entitlements` của gói Subscription hiện tại phục vụ `EntitlementGuard` (`< 1ms`), tự invalidate khi nâng/hạ gói. |
+| `wallet:{hostId}:credits` | `HASH` | 24h | Số dư Credit 3 ngăn thời gian thực (`promo`, `plan`, `topup`, `total`), trừ realtime mỗi 1 giây theo Per-Second Metering và flush ACID xuống PostgreSQL. |
 
-### 3.3. Thiết kế Cơ sở Dữ liệu Quan hệ trên PostgreSQL 16 (ACID & S3 Offload)
+### 3.3. Thiết kế Cơ sở Dữ liệu Quan hệ trên PostgreSQL 16 (10 Bảng ACID & S3 Offload)
 
-Cơ sở dữ liệu chính của hệ thống được chuyển từ NoSQL sang **PostgreSQL 16**, kết nối bất đồng bộ qua **SQLAlchemy 2.0 Async (`asyncpg`)** và quản lý di trú lược đồ qua **Alembic**:
+Cơ sở dữ liệu chính của hệ thống là **PostgreSQL 16**, kết nối bất đồng bộ qua **SQLAlchemy 2.0 Async (`asyncpg`)** và quản lý di trú lược đồ qua **Alembic** (`apps/backend/alembic/versions/20261112_0001_initial_schema.py`). Hiện tại ORM (`apps/backend/app/models/`) đã định nghĩa đầy đủ **10 bảng quan hệ**:
 
-1. **Bảng `users` (Tài khoản người dùng cốt lõi, đồng bộ từ Cognito `sub`)**:
-   - `id`: UUID (Primary Key, khớp `sub` của Cognito User Pool)
-   - `email`: VARCHAR(255) UNIQUE NOT NULL (Indexed)
-   - `role`: VARCHAR(20) NOT NULL DEFAULT 'HOST' (`HOST` | `ADMIN`)
-   - `status`: VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' (`ACTIVE` | `SUSPENDED`)
-   - `created_at` / `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+1. **Bảng `users`** (`app/models/user.py`):
+   - `id`: `VARCHAR(64)` Primary Key (khớp `sub` của Amazon Cognito User Pool)
+   - `email`: `VARCHAR(255)` UNIQUE NOT NULL (Indexed)
+   - `role`: `VARCHAR(32)` NOT NULL DEFAULT `'HOST'` (`HOST` | `ADMIN`)
+   - `status`: `VARCHAR(32)` NOT NULL DEFAULT `'ACTIVE'` (`ACTIVE` | `SUSPENDED`)
+   - `created_at` / `updated_at`: `TIMESTAMPTZ`
 
-2. **Bảng `user_profiles` (Hồ sơ cá nhân & cài đặt chi tiết của Host)**:
-   - `id`: UUID (Primary Key)
-   - `user_id`: UUID UNIQUE NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
-   - `full_name`: VARCHAR(255) NOT NULL
-   - `phone_number`: VARCHAR(50) NULL
-   - `avatar_url`: VARCHAR(1024) NULL
-   - `timezone`: VARCHAR(50) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh'
-   - `default_source_lang`: VARCHAR(10) NOT NULL DEFAULT 'vi-VN'
-   - `default_target_langs`: JSONB NOT NULL DEFAULT '["en-US"]'
-   - `company_name`: VARCHAR(255) NULL
-   - `tax_code`: VARCHAR(50) NULL
-   - `company_address`: VARCHAR(500) NULL
-   - `bio`: TEXT NULL
-   - `stripe_customer_id`: VARCHAR(255) NULL
-   - `preferences`: JSONB NOT NULL DEFAULT '{}'
-   - `created_at` / `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+2. **Bảng `user_profiles`** (`app/models/user.py`):
+   - `id`: `UUID` Primary Key
+   - `user_id`: `VARCHAR(64)` UNIQUE NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
+   - `full_name`: `VARCHAR(255)` NOT NULL
+   - `avatar_url`: `VARCHAR(1024)` NULL
+   - `timezone`: `VARCHAR(64)` NOT NULL DEFAULT `'Asia/Ho_Chi_Minh'`
+   - `default_source_lang`: `VARCHAR(16)` NOT NULL DEFAULT `'vi-VN'`
+   - `default_target_langs`: `JSON` NOT NULL DEFAULT `'["en-US"]'`
+   - `company_name`: `VARCHAR(255)` NULL
+   - `tax_code`: `VARCHAR(64)` NULL
+   - `company_address`: `VARCHAR(512)` NULL
+   - `stripe_customer_id`: `VARCHAR(128)` NULL (Indexed)
+   - `preferences`: `JSON` NOT NULL DEFAULT `'{}'`
+   - `created_at` / `updated_at`: `TIMESTAMPTZ`
+   - *(Ghi chú mở rộng cho `EP02-S5`: sẽ bổ sung migration cột `phone_number`, `bio` khi triển khai Profile API).*
 
-3. **Bảng `wallets` (Số dư tài chính & Cấu hình nạp tự động)**:
-   - `id`: UUID (Primary Key)
-   - `host_id`: UUID UNIQUE NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
-   - `balance`: NUMERIC(12, 4) NOT NULL DEFAULT 0.0000 (Ràng buộc `CHECK (balance >= 0)`)
-   - `currency`: VARCHAR(3) NOT NULL DEFAULT 'USD'
-   - `auto_degrade_tts`: BOOLEAN NOT NULL DEFAULT FALSE
-   - `auto_topup_enabled`: BOOLEAN NOT NULL DEFAULT FALSE
-   - `auto_topup_threshold`: NUMERIC(10, 2) NULL (ví dụ `$5.00`)
-   - `auto_topup_amount`: NUMERIC(10, 2) NULL (ví dụ `$20.00`)
-   - `default_payment_method_id`: VARCHAR(255) NULL
-   - `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+3. **Bảng `wallets`** (`app/models/wallet.py`):
+   - `id`: `UUID` Primary Key
+   - `host_id`: `VARCHAR(64)` UNIQUE NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
+   - `balance`: `NUMERIC(12, 4)` NOT NULL DEFAULT `0.0000`
+   - `currency`: `VARCHAR(8)` NOT NULL DEFAULT `'USD'`
+   - `auto_degrade_tts`: `BOOLEAN` NOT NULL DEFAULT `TRUE`
+   - `auto_topup_enabled`: `BOOLEAN` NOT NULL DEFAULT `FALSE`
+   - `auto_topup_threshold`: `NUMERIC(12, 4)` NULL
+   - `auto_topup_amount`: `NUMERIC(12, 4)` NULL
+   - `default_payment_method_id`: `VARCHAR(128)` NULL
+   - `created_at` / `updated_at`: `TIMESTAMPTZ`
 
-4. **Bảng `payment_transactions` (Lịch sử Nạp tiền, Khuyến mãi & Hoàn tiền)**:
-   - `id`: UUID (Primary Key)
-   - `host_id`: UUID NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
-   - `transaction_id`: VARCHAR(255) UNIQUE NOT NULL (Stripe PaymentIntent ID / VietQR tx_id bảo đảm Idempotency)
-   - `type`: VARCHAR(30) NOT NULL (`TOP_UP` | `AUTO_TOP_UP` | `PROMO_CREDIT` | `REFUND`)
-   - `provider`: VARCHAR(30) NOT NULL (`STRIPE` | `VIETQR` | `VNPAY` | `SYSTEM`)
-   - `amount`: NUMERIC(10, 2) NOT NULL
-   - `currency`: VARCHAR(3) NOT NULL DEFAULT 'USD'
-   - `status`: VARCHAR(20) NOT NULL DEFAULT 'PENDING' (`PENDING` | `SUCCEEDED` | `FAILED`)
-   - `invoice_pdf_url`: VARCHAR(1024) NULL
-   - `raw_webhook_meta`: JSONB NULL
-   - `created_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
-   - `completed_at`: TIMESTAMPTZ NULL
-   - Index trên `(host_id, created_at DESC)`
+4. **Bảng `payment_transactions`** (`app/models/wallet.py`):
+   - `id`: `UUID` Primary Key
+   - `host_id`: `VARCHAR(64)` NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE, Indexed)
+   - `transaction_id`: `VARCHAR(128)` UNIQUE NOT NULL (Indexed — bảo đảm Idempotency cho Stripe/VietQR/Welcome Bonus)
+   - `type`: `VARCHAR(32)` NOT NULL (Indexed — `TOP_UP` | `AUTO_TOP_UP` | `PROMO_CREDIT` | `USAGE_DEDUCTION` | `REFUND` | `ADMIN_ADJUSTMENT`)
+   - `provider`: `VARCHAR(32)` NOT NULL (`STRIPE` | `VIETQR` | `VNPAY` | `SYSTEM` | `INTERNAL`)
+   - `amount`: `NUMERIC(12, 4)` NOT NULL
+   - `currency`: `VARCHAR(8)` NOT NULL DEFAULT `'USD'`
+   - `status`: `VARCHAR(32)` NOT NULL DEFAULT `'PENDING'` (Indexed — `PENDING` | `SUCCEEDED` | `FAILED`)
+   - `metadata_json`: `JSON` NOT NULL DEFAULT `'{}'`
+   - `created_at` / `completed_at`: `TIMESTAMPTZ`
 
-5. **Bảng `custom_vocabularies` (Từ điển chuyên ngành của Host cho Transcribe & Translate - `FR-206`)**:
-   - `id`: UUID (Primary Key)
-   - `host_id`: UUID NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
-   - `name`: VARCHAR(100) NOT NULL
-   - `language_code`: VARCHAR(10) NOT NULL
-   - `terms`: JSONB NOT NULL DEFAULT '[]'
-   - `created_at` / `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+5. **Bảng `promo_codes`** (`app/models/wallet.py` — `FR-509`):
+   - `id`: `UUID` Primary Key, `code` (`VARCHAR(32)` UNIQUE Indexed), `credit_amount` (`NUMERIC(12, 4)`), `max_redemptions` (`INT`), `redemptions_count` (`INT` default `0`), `expires_at` (`TIMESTAMPTZ` NULL), `is_active` (`BOOL` default `TRUE`), `created_at` (`TIMESTAMPTZ`).
 
-6. **Bảng `promo_codes` & `promo_redemptions` (Quản lý Voucher & Credit dùng thử - `FR-509`)**:
-   - `promo_codes`: `id` (UUID PK), `code` (VARCHAR UNIQUE), `credit_amount` (NUMERIC(10, 2)), `max_uses` (INT), `current_uses` (INT), `expires_at` (TIMESTAMPTZ), `is_active` (BOOL), `created_at`.
-   - `promo_redemptions`: `id` (UUID PK), `promo_code_id` (FK), `user_id` (FK), `credit_applied` (NUMERIC(10, 2)), `redeemed_at` (TIMESTAMPTZ). `UNIQUE(promo_code_id, user_id)` ngăn chặn gian lận nhận 2 lần.
+6. **Bảng `promo_redemptions`** (`app/models/wallet.py` — `FR-509`):
+   - `id`: `UUID` Primary Key, `promo_code_id` (`UUID` FK $\rightarrow$ `promo_codes.id`), `user_id` (`VARCHAR(64)` FK $\rightarrow$ `users.id`), `credit_amount` (`NUMERIC(12, 4)`), `redeemed_at` (`TIMESTAMPTZ`).
+   - Ràng buộc `UNIQUE(promo_code_id, user_id)` (`uq_promo_code_user`) chống nhận trùng mã khuyến mãi.
 
-7. **Bảng `rooms` (Phiên hội thảo/cuộc họp)**:
-   - `id`: UUID (Primary Key)
-   - `host_id`: UUID NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
-   - `room_code`: VARCHAR(16) UNIQUE NOT NULL (Indexed)
-   - `title`: VARCHAR(255) NOT NULL DEFAULT 'Untitled Meeting'
-   - `mode`: VARCHAR(20) NOT NULL DEFAULT 'BROADCAST' (`1_ON_1` | `BROADCAST`)
-   - `source_lang`: VARCHAR(10) NOT NULL DEFAULT 'en-US'
-   - `target_langs`: JSONB NOT NULL DEFAULT '[]'
-   - `password_hash`: VARCHAR(255) NULL (Bảo vệ phòng riêng tư)
-   - `max_listeners`: INTEGER NOT NULL DEFAULT 1000
-   - `vocabulary_id`: UUID NULL (FK $\rightarrow$ `custom_vocabularies.id`)
-   - `allow_listener_download`: BOOLEAN NOT NULL DEFAULT TRUE
-   - `status`: VARCHAR(20) NOT NULL DEFAULT 'CREATED' (`CREATED` | `ACTIVE` | `PAUSED` | `ENDED`)
-   - `total_cost`: NUMERIC(10, 4) NOT NULL DEFAULT 0.0000
-   - `total_duration_sec`: INTEGER NOT NULL DEFAULT 0
-   - `created_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
-   - `started_at` / `ended_at`: TIMESTAMPTZ NULL
-   - Index trên `(host_id, created_at DESC)`
+7. **Bảng `custom_vocabularies`** (`app/models/vocabulary.py` — `FR-206`):
+   - `id`: `UUID` Primary Key, `host_id` (`VARCHAR(64)` FK $\rightarrow$ `users.id`), `name` (`VARCHAR(128)`), `language_code` (`VARCHAR(16)` default `'vi-VN'`), `terms` (`JSON`), `aws_vocab_name` (`VARCHAR(128)` NULL), `sync_status` (`VARCHAR(32)` default `'PENDING'`), `created_at` / `updated_at`.
 
-8. **Bảng `room_transcripts` (Metadata và Khóa đối tượng S3 - Tránh quá tải DB)**:
-   - `id`: UUID (Primary Key)
-   - `room_id`: UUID UNIQUE NOT NULL (FK $\rightarrow$ `rooms.id` ON DELETE CASCADE)
-   - `status`: VARCHAR(20) NOT NULL DEFAULT 'PENDING' (`PENDING` | `PROCESSING` | `READY` | `FAILED`)
-   - `master_json_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/master.json`)
-   - `export_txt_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/transcript.txt`)
-   - `export_srt_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/subtitles.srt`)
-   - `export_vtt_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/subtitles.vtt`)
-   - `export_csv_s3_key`: VARCHAR(1024) NULL (`transcripts/{roomId}/transcript.csv`)
-   - `summary_status`: VARCHAR(20) NOT NULL DEFAULT 'NONE' (`NONE` | `GENERATING` | `READY` | `FAILED`)
-   - `summary_s3_key`: VARCHAR(1024) NULL (`summaries/{roomId}/summary.json`)
-   - `summary_cost`: NUMERIC(10, 4) NOT NULL DEFAULT 0.0000
-   - `total_segments`: INTEGER NOT NULL DEFAULT 0
-   - `file_size_bytes`: BIGINT NOT NULL DEFAULT 0
-   - `created_at` / `updated_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
+8. **Bảng `rooms`** (`app/models/room.py`):
+   - `id`: `VARCHAR(64)` Primary Key
+   - `host_id`: `VARCHAR(64)` NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE, Indexed)
+   - `title`: `VARCHAR(255)` NOT NULL
+   - `source_language`: `VARCHAR(16)` NOT NULL DEFAULT `'vi-VN'`
+   - `target_languages`: `JSON` NOT NULL DEFAULT `'[]'`
+   - `status`: `VARCHAR(32)` NOT NULL DEFAULT `'IDLE'` (Indexed — `IDLE` | `ACTIVE` | `PAUSED` | `ENDED`)
+   - `host_token_hash`: `VARCHAR(128)` NOT NULL
+   - `listener_passcode`: `VARCHAR(64)` NULL
+   - `started_at` / `ended_at` / `created_at` / `updated_at`: `TIMESTAMPTZ`
+   - *(Ghi chú mở rộng cho `EP04-S2`: sẽ bổ sung migration các cột `room_code`, `mode`, `max_listeners`, `vocabulary_id`, `allow_listener_download`, `total_cost`, `total_duration_sec`).*
 
-9. **Bảng `usage_ledger` (Sổ cái tính cước vi mô bất biến mỗi 10 giây)**:
-   - `id`: UUID (Primary Key)
-   - `room_id`: UUID NOT NULL (FK $\rightarrow$ `rooms.id` ON DELETE CASCADE)
-   - `host_id`: UUID NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
-   - `window_timestamp`: TIMESTAMPTZ NOT NULL (Mốc 10s)
-   - `audio_seconds`: NUMERIC(6, 2) NOT NULL DEFAULT 0
-   - `translated_chars`: INTEGER NOT NULL DEFAULT 0
-   - `tts_chars`: INTEGER NOT NULL DEFAULT 0
-   - `listener_count`: INTEGER NOT NULL DEFAULT 0
-   - `cost_amount`: NUMERIC(10, 4) NOT NULL DEFAULT 0.0000
-   - `balance_after`: NUMERIC(12, 4) NOT NULL
-   - `created_at`: TIMESTAMPTZ NOT NULL DEFAULT NOW()
-   - Index trên `(room_id, window_timestamp DESC)`, Index trên `(host_id, window_timestamp DESC)`
+9. **Bảng `room_transcripts`** (`app/models/room.py`):
+   - `id`: `UUID` Primary Key
+   - `room_id`: `VARCHAR(64)` NOT NULL (FK $\rightarrow$ `rooms.id` ON DELETE CASCADE, Indexed)
+   - `s3_key_master` / `s3_key_txt` / `s3_key_srt` / `s3_key_vtt` / `s3_key_csv`: `VARCHAR(512)` NULL
+   - `summary_status`: `VARCHAR(32)` NOT NULL DEFAULT `'PENDING'` (`PENDING` | `GENERATING` | `READY` | `FAILED`)
+   - `summary_s3_key`: `VARCHAR(512)` NULL
+   - `summary_cost_usd`: `NUMERIC(8, 4)` NOT NULL DEFAULT `0.0000`
+   - `created_at` / `updated_at`: `TIMESTAMPTZ`
+
+10. **Bảng `usage_ledger`** (`app/models/room.py` — Sổ cái kiểm toán chi phí theo từng giây thực tế):
+    - `id`: `UUID` Primary Key
+    - `room_id`: `VARCHAR(64)` NOT NULL (FK $\rightarrow$ `rooms.id` ON DELETE CASCADE, Indexed)
+    - `interval_index`: `INTEGER` NOT NULL
+    - `start_time` / `end_time`: `TIMESTAMPTZ` NOT NULL
+    - `audio_seconds`: `NUMERIC(8, 2)` NOT NULL
+    - `stt_cost`: `NUMERIC(10, 6)` NOT NULL DEFAULT `0`
+    - `mt_character_count`: `INTEGER` NOT NULL DEFAULT `0`, `mt_cost`: `NUMERIC(10, 6)` NOT NULL DEFAULT `0`
+    - `tts_character_count`: `INTEGER` NOT NULL DEFAULT `0`, `tts_cost`: `NUMERIC(10, 6)` NOT NULL DEFAULT `0`
+    - `fanout_event_count`: `INTEGER` NOT NULL DEFAULT `0`, `fanout_cost`: `NUMERIC(10, 6)` NOT NULL DEFAULT `0`
+    - `total_cost`: `NUMERIC(10, 6)` NOT NULL
+    - `created_at`: `TIMESTAMPTZ` NOT NULL
+
+> **Lộ trình Migration tiếp theo (`0002_credit_plans_and_ledger` — xem [2026-11-19-credit-plans-and-billing-design.md](file:///D:/code/ws-translation-realtime/docs/superpowers/specs/2026-11-19-credit-plans-and-billing-design.md))**:
+> - Thêm **4 bảng mới**: `plans` (4 gói cố định + JSONB `entitlements`), `subscriptions` (gói đang hoạt động & chu kỳ của Host), `credit_packs` (3 gói Top-up cố định `PACK_S/M/L`), và `credit_ledger` (Sổ cái lịch sử sử dụng & biến động Credit theo sự kiện).
+> - Nâng cấp `wallets` thành 3 ngăn (`promo_credits`, `plan_credits`, `topup_credits` + hạn dùng & `auto_topup_pack_id`), `payment_transactions` thêm `credits_granted`/`bonus_credits`/`bucket`, `usage_ledger` thêm `duration_seconds`/`listener_seconds`/`credits_deducted`/`deducted_breakdown`, `room_transcripts` thêm `expires_at` (chốt retention theo gói tại thời điểm kết thúc phòng + 14 ngày ân hạn khi hạ gói), và `rooms` thêm `scheduled_start_at`/`branding_config`/`tts_voice_config`/`profanity_filter_enabled`/`speaker_ids`.
 
 ---
 
@@ -278,14 +263,15 @@ Cơ sở dữ liệu chính của hệ thống được chuyển từ NoSQL sang
   - Đóng gói Docker multi-stage (`python:3.12-slim`), chạy trên ECS Fargate đằng sau ALB (`/api/*` và `/ws/*`), đảm nhiệm đồng thời:
     1. **REST API (`/api/v1/*`)**: Quản lý phòng, cấp Ephemeral JWT cho người nghe, xử lý Webhook thanh toán, xuất file biên bản dịch và gọi AI Summary.
     2. **Realtime Audio Ingest WebSocket (`/ws/v1/*`)**: Nhận luồng âm thanh nhị phân, ghi Redis Ring Buffer, điều phối STT -> MT -> TTS và bắn sự kiện qua AppSync Events.
-    3. **Async Background Tasks (`asyncio.create_task`)**: Chu kỳ chốt cước mỗi 10s (Metering & Billing trực tiếp trên Redis/DynamoDB) và đóng gói file `.txt`/`.srt`/`.vtt`/`.csv` lên S3 khi kết thúc phòng.
+    3. **Async Background Tasks (`asyncio.create_task`)**: Vòng lặp đo lường từng giây (1s Redis + 15s/Event ACID flush PostgreSQL `usage_ledger`/`credit_ledger`), đóng gói file `.txt`/`.srt`/`.vtt`/`.csv` lên S3 khi kết thúc phòng, Cron sweep hết hạn Credit/Subscription (kèm Grace Period 3 ngày) và gửi thông báo Amazon SES.
   - Thư viện bất đồng bộ (Non-blocking I/O):
+    - **`sqlalchemy.ext.asyncio` + `asyncpg`**: Kết nối bất đồng bộ tới PostgreSQL 16 (Alembic migrations).
     - **`amazon-transcribe`**: SDK chính thức của AWS hỗ trợ native `asyncio` HTTP/2 bi-directional streaming.
-    - **`aioboto3` / `aiobotocore`**: Gọi song song (`asyncio.gather`) tới Amazon Translate, Amazon Polly, Amazon Bedrock, S3 và DynamoDB mà không chặn Event Loop.
-    - **`redis.asyncio`**: Đọc/ghi Redis Stream Ring Buffer (`XADD`/`XRANGE`) với độ trễ `< 1ms`.
+    - **`aioboto3` / `aiobotocore`**: Gọi song song (`asyncio.gather`) tới Amazon Cognito, Amazon Translate, Amazon Polly, Amazon Bedrock và S3 mà không chặn Event Loop.
+    - **`redis.asyncio`**: Đọc/ghi Redis Stream Ring Buffer (`XADD`/`XRANGE`), Rate-limit & Token Blocklist với độ trễ `< 1ms`.
 - **Infrastructure as Code (IaC) & CI/CD**:
-  - **AWS CDK (TypeScript hoặc Python)** để định nghĩa toàn bộ VPC Single-AZ, ALB, 2 ECR Repositories, 2 ECS Fargate Services (`web` & `backend`), Redis, AppSync và DynamoDB.
-  - **GitHub Actions CI/CD** kết nối AWS qua **OIDC** (không dùng static AWS key): Tự động chạy Lint/Test -> Build 2 Docker Images (`web` & `backend`) -> Push lên **Amazon ECR** -> Trigger **ECS Rolling Deployment**.
+  - **Terraform (`infra/terraform/`)** đa môi trường (`local`, `dev`, `prod`) với các module tái sử dụng (`vpc`, `alb`, `ecr`, `ecs`, `rds`, `elasticache`, `cognito`, `appsync`, `s3_cloudfront`, `iam`, `security`, `waf`, `dev_box_ec2`).
+  - **GitHub Actions CI/CD** (`.github/workflows/backend-ci.yml`, `frontend-ci.yml`, `infra-ci.yml`, `pr-check.yml`): Tự động chạy Lint/Typecheck/Test/Terraform Validate trên mỗi PR; giai đoạn CD (AWS OIDC -> Push ECR -> ECS Rolling Deployment) thuộc `EP01-S4`.
 
 ### 4.2. Dịch vụ Đám mây AWS (AWS Services Mapping)
 
@@ -299,9 +285,10 @@ Cơ sở dữ liệu chính của hệ thống được chuyển từ NoSQL sang
 | **In-Memory State** | **Amazon ElastiCache for Redis** | Node đơn trong `AZ-a` (ví dụ: `cache.t4g.micro` hoặc `cache.t4g.small` cho giai đoạn đầu, nâng cấp không gián đoạn khi tăng tải). |
 | **Speech-to-Text (STT)** | **Amazon Transcribe Streaming** | HTTP/2 Streaming API, tính phí theo giây âm thanh thực tế. |
 | **Machine Translation (MT)** | **Amazon Translate** | Real-time Text Translation API, tính phí theo số ký tự dịch. |
-| **Text-to-Speech (TTS)** | **Amazon Polly (Neural Engine)** | `SynthesizeSpeech` API trả về luồng `mp3`/`ogg_vorbis`, tính phí theo số ký tự tổng hợp giọng nói. |
+| **Text-to-Speech (TTS)** | **Amazon Polly Neural** *(Primary)* + **Azure AI Speech Neural (`southeastasia`)** *(cho `vi-VN`, `th-TH`, `id-ID`)* | Bọc qua `TTSProviderAdapter` (`app/integrations/tts.py`); gọi Azure REST `cognitiveservices/v1` qua `httpx.AsyncClient` (không cài C++ SDK, đồng vùng Singapore `< 5ms`). Dùng gói **`F0` Free** (500k ký tự/tháng) cho `local`/`dev`, và gói **`S0` Standard** (`$16/1M ký tự`, commercial-use, high concurrency) cho `prod`. Voice `vi-VN`: `vi-VN-HoaiMyNeural` (Nữ) / `vi-VN-NamMinhNeural` (Nam). Key lưu trên AWS Secrets Manager (`AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`); tự fallback `Text-only` (`0 Cr`) khi timeout/`5xx` hoặc chưa cấu hình key. |
+| **Email Notifications** | **Amazon SES** | Gửi OTP Cognito và 8 loại thông báo nghiệp vụ (Hóa đơn PDF, Nhắc gia hạn VietQR T-7/T-3/T-1, `PAST_DUE`, Promo sắp hết hạn, Biên bản/AI Summary sẵn sàng). |
 | **AI Meeting Summary (LLM)** | **Amazon Bedrock** (`Claude 3.5 Haiku` / `Amazon Nova Lite`) | Gọi On-Demand khi Host bấm nút *"Tóm tắt nội dung AI"*, tính phí theo Input/Output Tokens và lưu cache kết quả trên S3 trong 90 ngày. |
-| **Primary Relational DB** | **Amazon RDS for PostgreSQL / Aurora Serverless v2** (Local: **PostgreSQL 16 Docker**) | Cơ sở dữ liệu quan hệ ACID chính (9 bảng), kết nối qua asyncpg & SQLAlchemy 2.0, migration qua Alembic. |
+| **Primary Relational DB** | **Amazon RDS for PostgreSQL 16** (Local: PostgreSQL 16 Docker / DevBox) | Cơ sở dữ liệu quan hệ ACID chính (10 bảng), kết nối qua `asyncpg` & SQLAlchemy 2.0, migration qua Alembic. |
 | **Authentication** | **Amazon Cognito** | Quản lý tài khoản Host; Backend FastAPI trực tiếp xác thực Cognito JWT và cấp Ephemeral JWT cho người nghe. |
 | **Monitoring & Tracing** | **Amazon CloudWatch** + **AWS X-Ray** | Thu thập Container Logs, Custom Metrics (Latency STT/MT/TTS), cảnh báo lỗi và theo dõi cước phí. |
 
@@ -353,18 +340,18 @@ flowchart LR
    - **Entrypoint**: `uvicorn app.main:app --host 0.0.0.0 --port 8000 --loop uvloop --http httptools --ws websockets --timeout-graceful-shutdown 120`.
    - **Healthcheck**: `GET /api/v1/health` (kiểm tra kết nối Redis ping `< 5ms`) trả về `200 OK`.
 
-### 5.3. Quy trình Chi tiết trên GitHub Actions (`.github/workflows/ci-cd.yml`)
+### 5.3. Quy trình Chi tiết trên GitHub Actions (`.github/workflows/`)
 
-Pipeline được chia làm 3 giai đoạn tự động hóa hoàn toàn và tối ưu theo **Path Filtering** (chỉ build & deploy service nào có thay đổi code):
+Pipeline được tách thành các workflow chuyên biệt theo **Path Filtering** (chỉ chạy job cho phần có thay đổi code):
 
-1. **Giai đoạn 1 — Kiểm tra Chất lượng Code & Unit Test (Chạy trên mọi Pull Request và Push)**:
-   - **Job `ci-frontend`** (chạy khi `apps/web/**` thay đổi):
-     - Chạy `pnpm lint` (ESLint) + `pnpm typecheck` (`tsc --noEmit`) + `pnpm test` (Vitest).
-   - **Job `ci-backend`** (chạy khi `apps/backend/**` thay đổi):
-     - Chạy `uv run ruff check .` (Lint) + `uv run mypy app` (Typecheck) + `uv run pytest` (Unit & Async Integration Tests với `fakeredis` / `moto` mock DynamoDB & S3).
+1. **Giai đoạn 1 — Kiểm tra Chất lượng Code & Unit Test (Đã triển khai trên mọi Pull Request và Push)**:
+   - **`frontend-ci.yml`** (`apps/web/**`): `pnpm lint` (ESLint) + `pnpm typecheck` (`tsc --noEmit`) + `pnpm test:run` (Vitest) + `pnpm build`.
+   - **`backend-ci.yml`** (`apps/backend/**`): `uv run ruff check .` (Lint) + `uv run mypy app` (Typecheck) + `uv run pytest -v` (Unit & Async Integration Tests với `fakeredis` + SQLite/PostgreSQL async + mock AWS clients).
+   - **`infra-ci.yml`** (`infra/terraform/**`): `terraform fmt -check -recursive` + `terraform validate` cho cả 3 môi trường (`local`, `dev`, `prod`).
+   - **`pr-check.yml`**: Kiểm tra tiêu chuẩn PR/Commit.
 
-2. **Giai đoạn 2 — Build Docker Image & Push lên Amazon ECR (Khi merge vào `staging` hoặc `main`)**:
-   - Xác thực với AWS thông qua `aws-actions/configure-aws-credentials@v4` sử dụng **IAM OIDC Identity Provider** (bảo mật tuyệt đối, không lưu `AWS_SECRET_ACCESS_KEY` trên GitHub).
+2. **Giai đoạn 2 — Build Docker Image & Push lên Amazon ECR (Planned trong `EP01-S4` — Khi merge vào `staging` hoặc `main`)**:
+   - Xác thực với AWS thông qua `aws-actions/configure-aws-credentials` (pin SHA 40 ký tự) sử dụng **IAM OIDC Identity Provider** (không dùng static AWS key).
    - Sử dụng **Docker Buildx** kết hợp **GitHub Actions Cache (`type=gha`)** để tái sử dụng các Docker layers không đổi (giảm thời gian build từ 4 phút xuống `< 45 giây`).
    - Gắn 2 thẻ (tags) cho mỗi lần build: `:<git-commit-sha>` (bất biến để rollback tức thì) và `:latest`.
    - Đẩy tương ứng lên 2 kho ECR:

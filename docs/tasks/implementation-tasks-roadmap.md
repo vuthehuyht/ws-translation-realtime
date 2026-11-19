@@ -1,9 +1,10 @@
 # Danh mục Chức năng & Bảng Phân rã Task Chi tiết (Granular Task Breakdown & Technical Roadmap)
 
 - **Mã tài liệu**: `DOC-05-TASKS`
-- **Phiên bản**: `2.0` (Phân rã chi tiết mức nguyên tử - Atomic Features & CRUD Tasks)
-- **Ngày cập nhật**: 2026-11-12
+- **Phiên bản**: `3.0` (Đồng bộ 100% với 4 Gói cố định, Ví Credit 3 ngăn, `EntitlementGuard`, Per-Second Billing, Lịch sử Nạp/Sử dụng, Multi-Provider TTS `vi-VN` & Trạng thái `[DONE]` theo code mới nhất)
+- **Ngày cập nhật**: 2026-11-19
 - **Tài liệu tham chiếu**:
+  - [epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md) *(Bản phân rã 9 Epic & 36 Sub-Epic kèm phân tầng `P0/P1/P2`)*
   - [01-business-requirements-and-billing.md](file:///D:/code/ws-translation-realtime/docs/specs/01-business-requirements-and-billing.md)
   - [02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md)
   - [03-system-architecture-and-techstack.md](file:///D:/code/ws-translation-realtime/docs/specs/03-system-architecture-and-techstack.md)
@@ -12,26 +13,26 @@
 
 ---
 
-## Mục lục Phân hệ (12 Phân hệ - 107 Chức năng Nguyên tử)
+## Mục lục Phân hệ (12 Phân hệ - 113 Chức năng Nguyên tử)
 
-1. [Phân hệ 1: Xác thực & Quản lý Tài khoản (Authentication & Accounts)](#phân-hệ-1-xác-thực--quản-lý-tài-khoản-authentication--accounts) (11 Tasks)
-2. [Phân hệ 2: Hồ sơ Cá nhân & Cài đặt Doanh nghiệp (User Profile & Settings)](#phân-hệ-2-hồ-sơ-cá-nhân--cài-đặt-doanh-nghiệp-user-profile--settings) (6 Tasks)
-3. [Phân hệ 3: Quản lý Ví Điện tử Cá nhân (CRUD Ví & Quản lý Tài chính)](#phân-hệ-3-quản-lý-ví-điện-tử-cá-nhân-crud-ví--quản-lý-tài-chính) (7 Tasks)
-4. [Phân hệ 4: Cổng Thanh toán & Nạp tiền (Top-up, Stripe, VietQR & Promo)](#phân-hệ-4-cổng-thanh-toán--nạp-tiền-top-up-stripe-vietqr--promo) (7 Tasks)
+1. [Phân hệ 1: Xác thực & Quản lý Tài khoản (Authentication & Accounts)](#phân-hệ-1-xác-thực--quản-lý-tài-khoản-authentication--accounts) (11 Tasks — 8 `DONE`)
+2. [Phân hệ 2: Hồ sơ Cá nhân, Doanh nghiệp & Quyền riêng tư GDPR (User Profile & Privacy)](#phân-hệ-2-hồ-sơ-cá-nhân--cài-đặt-doanh-nghiệp-user-profile--settings) (6 Tasks)
+3. [Phân hệ 3: Gói Dịch vụ, Entitlements, Ví Credit 3 Ngăn & Lịch sử (Plans, Credit Wallet & History)](#phân-hệ-3-quản-lý-ví-điện-tử-cá-nhân-crud-ví--quản-lý-tài-chính) (11 Tasks)
+4. [Phân hệ 4: Thanh toán Gói cố định, Top-up Pack, Stripe, VietQR & Promo](#phân-hệ-4-cổng-thanh-toán--nạp-tiền-top-up-stripe-vietqr--promo) (7 Tasks)
 5. [Phân hệ 5: Quản lý Bộ Từ điển Chuyên ngành (Custom Vocabularies CRUD & AWS Sync)](#phân-hệ-5-quản-lý-bộ-từ-điển-chuyên-ngành-custom-vocabularies-crud--aws-sync) (8 Tasks)
-6. [Phân hệ 6: Quản lý Phòng & Phiên dịch (Room & Session Lifecycle)](#phân-hệ-6-quản-lý-phòng--phiên-dịch-room--session-lifecycle) (13 Tasks)
+6. [Phân hệ 6: Quản lý Phòng, Mic Check & Tính năng Mở rộng Theo Gói (Room Lifecycle & Tier Features)](#phân-hệ-6-quản-lý-phòng--phiên-dịch-room--session-lifecycle) (15 Tasks)
 7. [Phân hệ 7: Thu âm & Giao thức Nhị phân (Audio Ingest & Worklets)](#phân-hệ-7-thu-âm--giao-thức-nhị-phân-audio-ingest--worklets) (8 Tasks)
-8. [Phân hệ 8: Nhận diện, Dịch thuật & Tổng hợp Giọng nói AI (Streaming AI Pipeline)](#phân-hệ-8-nhận-diện-dịch-thuật--tổng-hợp-giọng-nói-ai-streaming-ai-pipeline) (11 Tasks)
-9. [Phân hệ 9: Đo đếm & Tính cước 10 giây (Realtime Micro-Billing Engine)](#phân-hệ-9-đo-đếm--tính-cước-10-giây-realtime-micro-billing-engine) (7 Tasks)
-10. [Phân hệ 10: Biên bản Dịch thuật & AI Tóm tắt qua Bedrock (Transcripts & AI Summary)](#phân-hệ-10-biên-bản-dịch-thuật--ai-tóm-tắt-qua-bedrock-transcripts--ai-summary) (10 Tasks)
+8. [Phân hệ 8: Nhận diện, Dịch thuật & Multi-Provider Neural TTS (Streaming AI Pipeline)](#phân-hệ-8-nhận-diện-dịch-thuật--tổng-hợp-giọng-nói-ai-streaming-ai-pipeline) (11 Tasks)
+9. [Phân hệ 9: Đo đếm & Tính cước Theo Từng Giây (Per-Second Credit Billing Engine)](#phân-hệ-9-đo-đếm--tính-cước-theo-từng-giây-per-second-credit-billing-engine) (7 Tasks)
+10. [Phân hệ 10: Biên bản S3, AI Tóm tắt Bedrock & Session Analytics](#phân-hệ-10-biên-bản-dịch-thuật--ai-tóm-tắt-qua-bedrock-transcripts--ai-summary) (10 Tasks)
 11. [Phân hệ 11: Hạ tầng, Độ sẵn sàng cao & Quản trị Hệ thống (HA, Failover & Admin Portal)](#phân-hệ-11-hạ-tầng-độ-sẵn-sàng-cao--quản-trị-hệ-thống-ha-failover--admin-portal) (8 Tasks)
-12. [Phân hệ 12: Màn hình Giao diện Người dùng Web (Next.js 15 UI Screens)](#phân-hệ-12-màn-hình-giao-diện-người-dùng-web-nextjs-15-ui-screens) (11 Tasks)
+12. [Phân hệ 12: Màn hình Giao diện Người dùng Web (Next.js 15 UI Screens)](#phân-hệ-12-màn-hình-giao-diện-người-dùng-web-nextjs-15-ui-screens) (11 Tasks — 3 `DONE`)
 
 ---
 
 ## Phân hệ 1: Xác thực & Quản lý Tài khoản (Authentication & Accounts)
 
-### `TASK-AUTH-01`: Đăng ký tài khoản Host bằng Email & Password
+### `TASK-AUTH-01`: Đăng ký tài khoản Host bằng Email & Password `[DONE]` *(Anti-abuse blocklist bổ sung ở `TASK-PLAN-04`)*
 - **Mã chức năng**: `FR-101.1` | **Scope**: `Backend API & Cognito`
 - **Nghiệp vụ chi tiết**:
   - Nhận `email`, `password`, `fullName`.
@@ -50,7 +51,7 @@
 - **Bảng DB tác động**: Chưa lưu vào PostgreSQL (đợi bước confirm OTP).
 - **Tiêu chí nghiệm thu (AC)**: Đăng ký thành công trả về `201`, nhận được email OTP qua SES, email trùng bị trả về `409 Conflict`.
 
-### `TASK-AUTH-02`: Xác thực mã OTP kích hoạt tài khoản & Khởi tạo Ví/Profile
+### `TASK-AUTH-02`: Xác thực mã OTP kích hoạt tài khoản & Khởi tạo Ví/Profile `[DONE]`
 - **Mã chức năng**: `FR-101.2` | **Scope**: `Backend API & PostgreSQL`
 - **Nghiệp vụ chi tiết**:
   - Nhận `email`, `otpCode` (6 chữ số).
@@ -62,18 +63,18 @@
     4. Ghi một bản ghi vào `payment_transactions (host_id = users.id, transaction_id = 'welcome_' + sub, type = 'PROMO_CREDIT', provider = 'SYSTEM', amount = 2.00, status = 'SUCCEEDED')`.
   - Cam kết tính bất biến (Idempotent): Nếu user gửi mã OTP lần 2 hoặc trigger bị gọi lặp lại, không xảy ra duplicate key error.
 - **Luồng xử lý (Flow)**:
-  1. Client gửi `POST /api/v1/auth/confirm-register` với `email`, `otpCode`.
+  1. Client gửi `POST /api/v1/auth/confirm` với `email`, `otpCode`.
   2. Backend gọi Cognito `ConfirmSignUp`.
   3. Lấy thông tin `sub` từ Cognito `AdminGetUser`.
   4. Thực thi transaction PostgreSQL khởi tạo 3 bảng.
-  5. Trả về `200 OK` thông báo tài khoản kích hoạt thành công kèm ví đã nạp $2.00 credit.
+  5. Trả về `200 OK` (`{"status": "CONFIRMED"}`, không lộ thông tin nội bộ tài khoản).
 - **Input / Output**:
   - Input: `{"email": "host@domain.com", "otpCode": "123456"}`
-  - Output: `{"message": "Account activated successfully", "walletBalance": 2.00, "currency": "USD"}`
+  - Output: `{"status": "CONFIRMED"}`
 - **Bảng DB tác động**: `users`, `user_profiles`, `wallets`, `payment_transactions`.
 - **Tiêu chí nghiệm thu (AC)**: 100% tài khoản xác thực OTP thành công đều có bản ghi `wallets` với số dư `$2.00`.
 
-### `TASK-AUTH-03`: Gửi lại mã OTP kích hoạt (Resend OTP)
+### `TASK-AUTH-03`: Gửi lại mã OTP kích hoạt (Resend OTP) `[DONE]`
 - **Mã chức năng**: `FR-101.3` | **Scope**: `Backend API`
 - **Nghiệp vụ chi tiết**:
   - Nhận `email`.
@@ -87,7 +88,7 @@
   4. Trả về `200 OK` kèm thời gian chờ 60 giây tiếp theo.
 - **Tiêu chí nghiệm thu (AC)**: Không thể spam gửi OTP liên tục; email chưa đăng ký trả về `404 Not Found`.
 
-### `TASK-AUTH-04`: Đăng nhập Host bằng Email & Mật khẩu (SRP Auth)
+### `TASK-AUTH-04`: Đăng nhập Host bằng Email & Mật khẩu (HttpOnly Refresh Cookie + JWKS RS256) `[DONE]`
 - **Mã chức năng**: `FR-102.1` | **Scope**: `Backend API & Cognito`
 - **Nghiệp vụ chi tiết**:
   - Nhận `email`, `password`.
@@ -122,7 +123,7 @@
   - Khởi tạo ví và hồ sơ cá nhân cho user Apple mới.
 - **Tiêu chí nghiệm thu (AC)**: Đăng nhập Apple SSO trơn tru trên thiết bị iOS / Safari.
 
-### `TASK-AUTH-07`: Làm mới Access Token ngầm (Silent Token Refresh)
+### `TASK-AUTH-07`: Làm mới Access Token ngầm bằng HttpOnly Cookie (Silent Token Refresh) `[DONE]`
 - **Mã chức năng**: `FR-102.4` | **Scope**: `Backend API`
 - **Nghiệp vụ chi tiết**:
   - Endpoint `POST /api/v1/auth/refresh`.
@@ -132,7 +133,7 @@
   - Đảm bảo phiên làm việc của Host không bị ngắt quãng khi đang chủ trì phòng họp kéo dài nhiều giờ.
 - **Tiêu chí nghiệm thu (AC)**: Cấp lại AccessToken hợp lệ mà không bắt user nhập lại mật khẩu.
 
-### `TASK-AUTH-08`: Đăng xuất tài khoản & Thu hồi Token (Logout / Revoke Session)
+### `TASK-AUTH-08`: Đăng xuất tài khoản, Thu hồi Token & Redis Blocklist (Logout / Revoke Session) `[DONE]`
 - **Mã chức năng**: `FR-105.1` | **Scope**: `Backend API & Security`
 - **Nghiệp vụ chi tiết**:
   - Endpoint `POST /api/v1/auth/logout`.
@@ -142,7 +143,7 @@
   - Xóa cookie phiên tại Client.
 - **Tiêu chí nghiệm thu (AC)**: Token sau khi đăng xuất không thể tiếp tục gọi API bảo mật.
 
-### `TASK-AUTH-09`: Yêu cầu mã OTP Quên mật khẩu (Forgot Password)
+### `TASK-AUTH-09`: Yêu cầu mã OTP Quên mật khẩu (Forgot Password) `[DONE]`
 - **Mã chức năng**: `FR-103.1` | **Scope**: `Backend API & Cognito`
 - **Nghiệp vụ chi tiết**:
   - Endpoint `POST /api/v1/auth/forgot-password`.
@@ -151,7 +152,7 @@
   - Gọi AWS Cognito `ForgotPassword`. SES gửi mã OTP 6 số về email người dùng.
 - **Tiêu chí nghiệm thu (AC)**: Gửi mã OTP thành công; giới hạn chống spam hoạt động chuẩn xác.
 
-### `TASK-AUTH-10`: Xác nhận đặt lại mật khẩu mới bằng OTP (Reset Password)
+### `TASK-AUTH-10`: Xác nhận đặt lại mật khẩu mới bằng OTP (Reset Password) `[DONE]`
 - **Mã chức năng**: `FR-103.2` | **Scope**: `Backend API & Cognito`
 - **Nghiệp vụ chi tiết**:
   - Endpoint `POST /api/v1/auth/reset-password`.
@@ -235,205 +236,140 @@
 
 ## Phân hệ 3: Quản lý Ví Điện tử Cá nhân (CRUD Ví & Quản lý Tài chính)
 
-### `TASK-WAL-01`: Lấy thông tin Chi tiết Số dư Ví (Read Wallet)
+### `TASK-PLAN-01`: Migration 4 Gói cố định, Subscription, Credit Packs & Ví Credit 3 Ngăn
+- **Mã chức năng**: `FR-501.0` | **Scope**: `Backend Models & Alembic`
+- **Nghiệp vụ chi tiết**:
+  - Alembic migration `0002_credit_plans_and_ledger`: tạo bảng `plans`, `subscriptions`, `credit_packs`, `credit_ledger`; nâng cấp `wallets` thêm `promo_credits`, `promo_expires_at`, `plan_credits`, `plan_credits_expires_at`, `topup_credits`, `auto_topup_pack_id`, `auto_topup_threshold_credits` (`CHECK >= 0`); nâng cấp `payment_transactions`, `usage_ledger`, `room_transcripts`, `rooms`.
+  - Seed 4 gói cố định (`FREE $0`, `PRO $19 / 1.800 Cr`, `BUSINESS $59 / 6.000 Cr`, `ENTERPRISE $199 / 21.000 Cr`) và 3 gói Top-up lẻ (`PACK_S $10 / 1.000 Cr`, `PACK_M $30 / 3.000 Cr`, `PACK_L $100 / 10.000 Cr`).
+- **Tiêu chí nghiệm thu (AC)**: Migration upgrade/downgrade sạch trên PostgreSQL 16; dữ liệu seed idempotent.
+
+### `TASK-PLAN-02`: Bộ kiểm soát Quyền lợi Gói (`EntitlementGuard`) & Redis Cache
+- **Mã chức năng**: `FR-509.2` | **Scope**: `Backend Core & Redis`
+- **Nghiệp vụ chi tiết**:
+  - Đọc `plans.entitlements` từ cache Redis `host:{hostId}:entitlements` (TTL 15 phút, fallback PostgreSQL).
+  - Kiểm tra tập trung: `allowedRoomModes`, `maxTargetLangs`, `maxListeners`, `maxConcurrentRooms`, `allowTts`, `allowRoomPasscode`, `allowScheduledRooms`, `maxSpeakersPerRoom`, `brandingLevel`, `allowTtsVoiceSelection`, `allowProfanityFilter`, `exportFormats`, `aiSummaryLevel`, `analyticsLevel`, `allowAutoTopup`, `allowVatInvoice`.
+  - Nếu vượt gói -> ném `403 UPGRADE_REQUIRED` kèm `requiredPlan`.
+- **Tiêu chí nghiệm thu (AC)**: Độ trễ kiểm tra quyền `< 1ms`; tự invalidate cache ngay khi nâng/hạ gói.
+
+### `TASK-PLAN-03`: API Danh mục Gói, Credit Packs & Quản lý Subscription
+- **Mã chức năng**: `FR-501.0` | **Scope**: `Backend API`
+- **Nghiệp vụ chi tiết**:
+  - `GET /api/v1/plans` (Public): trả 4 gói cố định và bảng `entitlements`.
+  - `GET /api/v1/credit-packs` (Host): trả `PACK_S/M/L` kèm `% Bonus` tính sẵn theo gói của Host.
+  - `GET /api/v1/subscriptions/me` & `POST /api/v1/subscriptions/cancel` (`cancel_at_period_end = true`).
+- **Tiêu chí nghiệm thu (AC)**: Frontend render động bảng giá và khóa/mở tính năng không cần hard-code.
+
+### `TASK-PLAN-04`: Cron Sweep Hết hạn Credit, Grace Period 3 ngày, SES Notification Worker & Anti-Abuse `FREE`
+- **Mã chức năng**: `FR-509.3`, `FR-101.4` | **Scope**: `Backend Worker & Amazon SES`
+- **Nghiệp vụ chi tiết**:
+  - Chạy hàng giờ: sweep `promo_credits` quá hạn & `plan_credits` hết chu kỳ về `0` + ghi `credit_ledger (CREDIT_EXPIRED)`, bảo toàn `topup_credits`; giữ Grace Period 3 ngày cho Stripe `PAST_DUE`; gửi Email/In-app nhắc gia hạn VietQR T-7/T-3/T-1 và 8 sự kiện Notification Matrix qua Amazon SES.
+  - Chặn disposable email domain + IP rate-limit khi đăng ký tài khoản `FREE` mới.
+- **Tiêu chí nghiệm thu (AC)**: Không bao giờ xóa nhầm `topup_credits`; 100% sự kiện hết hạn có bản ghi `credit_ledger`.
+
+### `TASK-WAL-01`: Lấy thông tin Chi tiết Ví Credit 3 Ngăn (Read Wallet)
 - **Mã chức năng**: `FR-504.1` | **Scope**: `Backend API & Redis`
 - **Nghiệp vụ chi tiết**:
   - Endpoint `GET /api/v1/wallets/me`.
-  - Đọc số dư từ PostgreSQL `wallets`:
-    - `balance`: Số dư khả dụng định dạng `NUMERIC(12, 4)`.
-    - `currency`: Đơn vị tiền tệ (mặc định `USD`).
-    - `autoDegradeTts`: Trạng thái tự động hạ cấp TTS.
-    - `autoTopupEnabled`: Trạng thái bật tự động nạp.
-    - `autoTopupThreshold`: Ngưỡng kích hoạt nạp ngầm (e.g. `$5.00`).
-    - `autoTopupAmount`: Số tiền nạp mỗi lần (e.g. `$20.00`).
-  - Nếu Host đang có phòng hoạt động, đồng bộ số dư với key Redis `wallet:{hostId}:balance`.
-- **Tiêu chí nghiệm thu (AC)**: Số dư trả về chính xác tới 4 chữ số thập phân, thời gian phản hồi `< 20ms`.
+  - Trả số dư chi tiết (`1 USD = 100 Credits`, `NUMERIC(12, 2)`): `promoCredits` (+ `promoExpiresAt`), `planCredits` (+ `planCreditsExpiresAt`), `topupCredits`, `totalCredits`, `autoDegradeTts`, `autoTopupEnabled`, `autoTopupThresholdCredits`, `autoTopupPackCode`.
+  - Nếu Host đang có phòng hoạt động, đồng bộ với Redis Hash `wallet:{hostId}:credits`.
+- **Tiêu chí nghiệm thu (AC)**: Trả chính xác số dư cả 3 ngăn trong `< 20ms`.
 
 ### `TASK-WAL-02`: Cập nhật Cài đặt Tiết kiệm & Tự động Hạ cấp TTS
 - **Mã chức năng**: `FR-507.2` | **Scope**: `Backend API`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `PATCH /api/v1/wallets/me/settings`.
-  - Nhận `autoDegradeTts: boolean`.
-  - Cập nhật trường `wallets.auto_degrade_tts`.
-  - Ý nghĩa nghiệp vụ: Nếu bật `true`, khi phòng dịch còn dưới 1 phút chi phí, hệ thống sẽ tự động tắt giọng đọc Polly (chỉ giữ dịch chữ) để tiết kiệm 70% chi phí duy trì phòng.
-- **Tiêu chí nghiệm thu (AC)**: Cập nhật cờ thành công và có hiệu lực ngay trong chu kỳ tính cước tiếp theo.
+  - Endpoint `PATCH /api/v1/wallets/me/settings` (kiểm tra `entitlements.allowAutoDegradeTts`, mở từ `PRO+`).
+  - Cập nhật `wallets.auto_degrade_tts`.
+- **Tiêu chí nghiệm thu (AC)**: Cập nhật cờ thành công và có hiệu lực ngay ở giây tiếp theo.
 
-### `TASK-WAL-03`: Bật / Tắt và Cấu hình Ngưỡng Tự động Nạp tiền (Auto Top-up Settings)
+### `TASK-WAL-03`: Bật / Tắt và Cấu hình Tự động Nạp Gói Credit (Auto Top-up Settings)
 - **Mã chức năng**: `FR-503.1` | **Scope**: `Backend API`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `PUT /api/v1/wallets/me/auto-topup`.
-  - Nhận:
-    - `enabled: boolean`.
-    - `thresholdUsd: number` (Ngưỡng kích hoạt, tối thiểu `$2.00`, tối đa `$50.00`).
-    - `amountUsd: number` (Số tiền nạp thêm, tối thiểu `$10.00`, tối đa `$500.00`).
-  - Kiểm tra điều kiện: Host bắt buộc phải có phương thức thẻ thanh toán mặc định (`default_payment_method_id` không được null) mới cho phép bật `enabled = true`.
-  - Cập nhật vào bảng `wallets`.
-- **Tiêu chí nghiệm thu (AC)**: Không có thẻ lưu mà cố bật Auto Top-up sẽ bị trả về `400 Bad Request: Please add a payment card first`.
+  - Endpoint `PUT /api/v1/wallets/auto-topup` (kiểm tra `entitlements.allowAutoTopup` — chỉ `BUSINESS+`).
+  - Nhận `enabled: boolean`, `thresholdCredits` (VD `500 Cr`), `packCode` (`PACK_S` | `PACK_M` | `PACK_L`).
+  - Bắt buộc có `default_payment_method_id` mới cho phép bật `enabled = true`.
+- **Tiêu chí nghiệm thu (AC)**: Gói `FREE`/`PRO` trả về `403 UPGRADE_REQUIRED`; thiếu thẻ trả về `400 Bad Request`.
 
 ### `TASK-WAL-04`: Quản lý Phương thức Thanh toán Thẻ đã lưu (Stripe SetupIntent)
 - **Mã chức năng**: `FR-503.2` | **Scope**: `Backend API & Stripe`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `POST /api/v1/wallets/me/payment-methods/setup-intent`:
-    - Tạo Stripe `SetupIntent` gắn với `stripe_customer_id` của Host.
-    - Trả về `clientSecret` cho Frontend Stripe Elements thu thập thông tin thẻ an toàn (PCI-DSS compliant, backend không bao giờ chạm số thẻ thô).
-  - Endpoint `POST /api/v1/wallets/me/payment-methods/confirm`:
-    - Nhận `paymentMethodId` từ Stripe sau khi client nhập thẻ xong.
-    - Đặt làm thẻ mặc định: Lưu vào `wallets.default_payment_method_id` và `user_profiles.stripe_customer_id`.
-  - Endpoint `GET /api/v1/wallets/me/payment-methods`:
-    - Liệt kê thông tin thẻ đã lưu (4 số cuối, thương hiệu Visa/Mastercard, tháng/năm hết hạn).
-  - Endpoint `DELETE /api/v1/wallets/me/payment-methods/{id}`:
-    - Xóa thẻ đã lưu trên Stripe và cập nhật `default_payment_method_id = NULL`. Tự động tắt `auto_topup_enabled = false`.
-- **Tiêu chí nghiệm thu (AC)**: Lưu và xóa thẻ an toàn, tuyệt đối không lưu PAN/CVV trong DB.
+  - Endpoints `POST /wallets/me/payment-methods/{setup-intent,confirm}`, `GET /wallets/me/payment-methods`, `DELETE /wallets/me/payment-methods/{id}` (PCI-DSS compliant, không lưu PAN/CVV).
+- **Tiêu chí nghiệm thu (AC)**: Lưu và xóa thẻ an toàn; xóa thẻ tự tắt `auto_topup_enabled`.
 
-### `TASK-WAL-05`: Xem Danh sách Biến động Số dư Ví (Transactions History)
+### `TASK-WAL-05`: Lịch sử Nạp tiền (`topup-history`) & Lịch sử Sử dụng Credit (`usage-history`)
 - **Mã chức năng**: `FR-508.1` | **Scope**: `Backend API`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `GET /api/v1/wallets/me/transactions`.
-  - Query params: `page`, `limit` (mặc định 20), `type` (`TOP_UP`, `AUTO_TOP_UP`, `PROMO_CREDIT`, `SESSION_USAGE`, `REFUND`), `startDate`, `endDate`.
-  - Truy vấn bảng `payment_transactions` kết hợp phân trang (`OFFSET ... LIMIT ...`).
-  - Trả về danh sách: `id`, `transactionId`, `type`, `provider`, `amount`, `currency`, `status`, `createdAt`, `completedAt`, `invoicePdfUrl`.
-- **Tiêu chí nghiệm thu (AC)**: Lọc đúng loại giao dịch, phân trang chuẩn xác.
+  - **Lịch sử Nạp tiền & Mua gói**: `GET /api/v1/wallets/me/topup-history` (từ `payment_transactions`, lọc theo `type`, `provider`, `status`, `startDate`, `endDate`, trả `creditsGranted`, `bonusCredits`, `bucket`, `invoicePdfUrl`).
+  - **Lịch sử Sử dụng Credit**: `GET /api/v1/wallets/me/usage-history` (từ `credit_ledger`, lọc theo `eventType`: `ROOM_USAGE` | `AI_SUMMARY` | `CREDIT_EXPIRED`, trả `description`, `creditsDelta`, `bucketBreakdown`, `balanceAfter`).
+- **Tiêu chí nghiệm thu (AC)**: Phân trang & lọc chuẩn xác, số dư `balanceAfter` khớp 100% sổ cái.
 
-### `TASK-WAL-06`: Bảng Kê Đối soát Chi phí Chi tiết của 1 Phiên dịch (Session Usage Breakdown)
+### `TASK-WAL-06`: Bảng Kê Đối soát Từng Giây của 1 Phiên dịch (Session Usage Breakdown)
 - **Mã chức năng**: `FR-508.2` | **Scope**: `Backend API`
 - **Nghiệp vụ chi tiết**:
   - Endpoint `GET /api/v1/wallets/me/sessions/{roomId}/breakdown`.
-  - Truy vấn toàn bộ các bản ghi trong `usage_ledger` của `roomId`:
-    - Tổng số giây có tiếng nói (`totalAudioSeconds`).
-    - Tổng ký tự dịch thuật (`totalTranslatedChars`).
-    - Tổng ký tự đọc Polly (`totalTtsChars`).
-    - Lượng người nghe cao nhất và trung bình (`peakListeners`, `avgListeners`).
-    - Bóc tách chi phí thành 4 khoản: Phí STT ($), Phí Dịch ($), Phí Giọng đọc ($), Phí Người nghe ($).
-    - Biểu đồ tiêu thụ theo từng cửa sổ 10 giây (chuỗi thời gian để vẽ đồ thị).
-- **Tiêu chí nghiệm thu (AC)**: Tổng 4 khoản chi phí khớp 100% với `rooms.total_cost`.
+  - Truy vấn `usage_ledger` của `roomId`: `totalAudioSeconds`, `totalListenerSeconds`, `totalTranslatedChars`, `totalTtsChars`, bóc tách 4 khoản phí ra **Credits** (`STT`, `MT`, `TTS`, `Listeners`), phân bổ trừ 3 ngăn `Promo / Plan / Top-up`, chuỗi thời gian và nút xuất **CSV**.
+- **Tiêu chí nghiệm thu (AC)**: Tổng Credit các dòng `usage_ledger` khớp 100% với dòng `ROOM_USAGE` trong `credit_ledger`.
 
-### `TASK-WAL-07`: Tải Biên lai / Hóa đơn Điện tử Nạp tiền (Receipt PDF Download)
+### `TASK-WAL-07`: Tải Biên lai / Hóa đơn Điện tử VAT (Receipt PDF Download)
 - **Mã chức năng**: `FR-508.3` | **Scope**: `Backend API & PDF Generator`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `GET /api/v1/wallets/transactions/{transactionId}/receipt`.
-  - Kiểm tra giao dịch thuộc sở hữu của Host và có `status == 'SUCCEEDED'`.
-  - Đọc thông tin công ty từ `user_profiles` (Tên công ty, MST, Địa chỉ).
-  - Render template HTML hóa đơn chuẩn và xuất file PDF (sử dụng `weasyprint` hoặc thư viện sinh PDF).
-  - Trả về file PDF đính kèm hoặc tải qua S3 Presigned URL.
-- **Tiêu chí nghiệm thu (AC)**: File PDF sắc nét, hiển thị đầy đủ mã giao dịch, số tiền nạp và thông tin thuế.
+  - Endpoint `GET /api/v1/wallets/transactions/{transactionId}/receipt` (kiểm tra `entitlements.allowVatInvoice` cho hóa đơn VAT doanh nghiệp `BUSINESS+`).
+  - Render PDF hiển thị mã giao dịch, gói/pack, số tiền, số Credit (+ bonus) và thông tin công ty/MST từ `user_profiles`.
+- **Tiêu chí nghiệm thu (AC)**: File PDF sắc nét, đúng thông tin thuế.
 
 ---
 
 ## Phân hệ 4: Cổng Thanh toán & Nạp tiền (Top-up, Stripe, VietQR & Promo)
 
-### `TASK-PAY-01`: Tạo Lệnh Nạp tiền Quốc tế qua Stripe Checkout
+### `TASK-PAY-01`: Tạo Lệnh Thanh toán Quốc tế qua Stripe (Subscription & Top-up Pack cố định)
 - **Mã chức năng**: `FR-501.1` | **Scope**: `Backend API & Stripe`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `POST /api/v1/wallets/topup/stripe`.
-  - Nhận `amountUsd` (tối thiểu `$5.00`, tối đa `$2,000.00`).
-  - Sinh mã giao dịch nội bộ: `txId = "st_" + uuid7()`.
-  - Gọi Stripe API tạo `Checkout Session`:
-    - `line_items`: Nạp tiền ví phiên dịch ($amountUsd).
-    - `mode`: `payment`.
-    - `metadata`: `{"host_id": hostId, "tx_id": txId}`.
-    - `success_url`: `https://domain.com/dashboard/billing?status=success&tx={txId}`.
-    - `cancel_url`: `https://domain.com/dashboard/billing?status=cancelled`.
-  - Tạo bản ghi `payment_transactions (host_id = hostId, transaction_id = txId, type = 'TOP_UP', provider = 'STRIPE', amount = amountUsd, status = 'PENDING')`.
-  - Trả về `checkoutUrl` cho frontend điều hướng sang Stripe.
-- **Tiêu chí nghiệm thu (AC)**: Tạo thành công session Stripe, lưu bản ghi `PENDING` vào DB.
+  - `POST /api/v1/subscriptions/checkout` (`planCode: PRO|BUSINESS|ENTERPRISE`, `provider: STRIPE`): tạo Stripe Checkout Session (`mode=subscription`, giá cố định `$19/$59/$199`).
+  - `POST /api/v1/wallets/topup` (`packCode: PACK_S|PACK_M|PACK_L`, `provider: STRIPE`): tạo Checkout Session (`mode=payment`, giá cố định `$10/$30/$100`), tính sẵn `bonusCredits` theo gói.
+  - Lưu `payment_transactions (status = 'PENDING')`.
+- **Tiêu chí nghiệm thu (AC)**: Tạo session Stripe thành công cho cả Subscription và Top-up Pack.
 
-### `TASK-PAY-02`: Xử lý Webhook Stripe & Cộng tiền Nguyên tử (Stripe Webhook IPN)
+### `TASK-PAY-02`: Xử lý Webhook Stripe & Cộng Credit Nguyên tử (Stripe Webhook IPN)
 - **Mã chức năng**: `FR-502.1` | **Scope**: `Backend Webhook & PostgreSQL`
 - **Nghiệp vụ chi tiết**:
   - Endpoint `POST /api/v1/webhooks/payment/stripe`.
-  - Xác thực chữ ký header `stripe-signature` với `STRIPE_WEBHOOK_SECRET`. Nếu sai chữ ký, trả về ngay `400 Bad Request`.
-  - Lọc sự kiện `checkout.session.completed` hoặc `payment_intent.succeeded`.
-  - Lấy `txId = event.data.object.metadata.tx_id`.
-  - **Transaction Bất biến (Idempotent DB Lock)**:
-    ```sql
-    SELECT * FROM payment_transactions WHERE transaction_id = :txId FOR UPDATE;
-    ```
-    - Nếu `status == 'SUCCEEDED'`: Đã xử lý trước đó -> Bỏ qua và trả về `200 OK`.
-    - Nếu `status == 'PENDING'`:
-      - Cập nhật `payment_transactions.status = 'SUCCEEDED'`, `completed_at = now()`.
-      - Cộng tiền vào ví: `UPDATE wallets SET balance = balance + :amount, updated_at = now() WHERE host_id = :hostId`.
-      - Cập nhật cache Redis: `INCRBYFLOAT wallet:{hostId}:balance {amount}`.
-- **Tiêu chí nghiệm thu (AC)**: Bắn trùng lặp 5 lần webhook cùng 1 `txId` -> Tiền trong ví chỉ tăng đúng 1 lần duy nhất.
+  - Verify `stripe-signature`, khóa dòng `FOR UPDATE` theo `transaction_id` chống trùng lặp:
+    - Nếu là Subscription (`checkout.session.completed` / `invoice.paid`): cập nhật `subscriptions`, cấp `plan_credits` chu kỳ 30 ngày, xóa cache `host:{id}:entitlements`, ghi `credit_ledger`.
+    - Nếu là gia hạn lỗi (`invoice.payment_failed`): chuyển `status = 'PAST_DUE'` (Grace Period 3 ngày) + gửi email SES.
+    - Nếu là Top-up Pack: cộng vào `wallets.topup_credits` + đồng bộ Redis `wallet:{hostId}:credits` + ghi `credit_ledger`.
+- **Tiêu chí nghiệm thu (AC)**: Bắn trùng lặp 5 lần webhook chỉ cộng Credit đúng 1 lần.
 
-### `TASK-PAY-03`: Tạo Mã VietQR Động cho Chuyển khoản Ngân hàng Nội địa
+### `TASK-PAY-03`: Tạo Mã VietQR Động Cố định cho Subscription 30 ngày & Top-up Pack
 - **Mã chức năng**: `FR-501.2` | **Scope**: `Backend API & VietQR`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `POST /api/v1/wallets/topup/vietqr`.
-  - Nhận `amountUsd` (tối thiểu `$5.00`).
-  - Quy đổi sang VND theo tỷ giá cố định/cập nhật hàng ngày (ví dụ `1 USD = 25,400 VND`).
-    $$Amount_{VND} = \text{round}(amountUsd \times 25400, -3)$$
-  - Sinh mã giao dịch duy nhất 6-8 ký tự: `txCode = "TR" + random_digits(6)` (ví dụ `TR849201`).
-  - Sinh chuỗi VietQR chuẩn NAPAS EMVCo chứa STK ngân hàng thụ hưởng, mã ngân hàng (BIN), số tiền VND và nội dung chuyển khoản bắt buộc: `"ROOM " + txCode`.
-  - Sinh ảnh Data URL Base64 QR code.
-  - Lưu bản ghi `payment_transactions (transaction_id = txCode, type = 'TOP_UP', provider = 'VIETQR', amount = amountUsd, status = 'PENDING')` với hạn hiệu lực 15 phút.
-  - Trả về `qrDataUrl`, `txCode`, `amountVnd`, `bankAccount`, `bankName`, `expiresInSec: 900`.
-- **Tiêu chí nghiệm thu (AC)**: Quét mã QR bằng App ngân hàng bất kỳ (Vietcombank, MBBank, Techcombank...) tự động điền đúng STK, số tiền và nội dung chuyển khoản.
+  - Hỗ trợ `provider: VIETQR` trên `POST /api/v1/subscriptions/checkout` và `POST /api/v1/wallets/topup`.
+  - Quy đổi giá gói cố định sang VND, sinh `txCode = "TR" + 6 digits` (hạn 15 phút), sinh chuỗi EMVCo QR + Base64 Data URL, lưu `payment_transactions (PENDING)`.
+- **Tiêu chí nghiệm thu (AC)**: Quét QR bằng app ngân hàng VN tự điền đúng STK, số tiền và nội dung chuyển khoản.
 
 ### `TASK-PAY-04`: Xử lý Webhook Biến động Số dư Ngân hàng (SePay / Casso / VietQR IPN)
 - **Mã chức năng**: `FR-502.2` | **Scope**: `Backend Webhook`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `POST /api/v1/webhooks/payment/vietqr`.
-  - Kiểm tra API Key / HMAC Header của cổng SePay/Casso.
-  - Phân tích nội dung chuyển khoản (`content`): Dùng regex trích xuất mã giao dịch dạng `TR\d{6}`.
-  - Tìm bản ghi `payment_transactions` khớp với mã `txCode`.
-  - Kiểm tra số tiền chuyển thực tế: Phải $\ge$ số tiền yêu cầu trong giao dịch (sai số $< 1,000\text{ VND}$).
-  - Mở transaction khóa dòng `FOR UPDATE`:
-    - Chuyển `status = 'SUCCEEDED'`.
-    - Cộng tiền nguyên tử vào `wallets`.
-    - Cộng tiền vào Redis `wallet:{hostId}:balance`.
-    - Đẩy thông báo WebSocket tới màn hình Host: `{"event": "PAYMENT_CONFIRMED", "balance": newBalance}`.
-- **Tiêu chí nghiệm thu (AC)**: Tiền nổi vào ví của Host trong vòng $< 2\text{ giây}$ sau khi chuyển khoản thành công.
+  - Endpoint `POST /api/v1/webhooks/payment/vietqr`: verify HMAC/API key, parse `TR\d{6}`, khớp số tiền (sai số `< 1,000 VND`), khóa dòng `FOR UPDATE` -> kích hoạt Subscription 30 ngày (hoặc cộng `topup_credits`), cập nhật Redis, ghi `credit_ledger`, bắn WebSocket `PAYMENT_CONFIRMED` và gửi email biên lai.
+- **Tiêu chí nghiệm thu (AC)**: Credit/Gói có hiệu lực `< 2 giây` sau khi chuyển khoản.
 
-### `TASK-PAY-05`: Background Worker Tự động Nạp tiền Ngầm (Stripe Off-session Auto Top-up)
+### `TASK-PAY-05`: Background Worker Tự động Nạp Gói Credit Ngầm (Stripe Off-session Auto Top-up)
 - **Mã chức năng**: `FR-503.3` | **Scope**: `Backend Worker & Stripe`
 - **Nghiệp vụ chi tiết**:
-  - Được kích hoạt từ `billing_worker` khi số dư ví của Host chạm ngưỡng `balance < auto_topup_threshold`:
-    1. Kiểm tra cờ `auto_topup_enabled == true` và có `default_payment_method_id`.
-    2. Kiểm tra Redis Lock `lock:auto_topup:{hostId}` (TTL 5 phút) để tránh tạo nhiều lệnh nạp trùng nhau.
-    3. Sinh `txId = "auto_" + uuid7()`.
-    4. Tạo bản ghi `payment_transactions (status = 'PENDING', type = 'AUTO_TOP_UP', provider = 'STRIPE', amount = auto_topup_amount)`.
-    5. Gọi Stripe API:
-       ```python
-       stripe.PaymentIntent.create(
-           amount=int(auto_topup_amount * 100),
-           currency="usd",
-           customer=stripe_customer_id,
-           payment_method=default_payment_method_id,
-           off_session=True,
-           confirm=True,
-           metadata={"tx_id": txId, "host_id": hostId}
-       )
-       ```
-    6. Nếu trừ thẻ thành công: Cập nhật `status = 'SUCCEEDED'`, cộng ví, bắn thông báo cho Host.
-    7. Nếu trừ thẻ thất bại (thẻ hết tiền, thẻ khóa): Đánh dấu `status = 'FAILED'`, tạm thời tắt `auto_topup_enabled = false`, gửi cảnh báo khẩn cấp tới Host để nạp thủ công.
-- **Tiêu chí nghiệm thu (AC)**: Cuộc họp đang chạy tự nạp thêm tiền mượt mà không bị ngắt quãng âm thanh.
+  - Kích hoạt khi `total_credits < auto_topup_threshold_credits` (chỉ gói `BUSINESS+` có `auto_topup_enabled = true`).
+  - Dùng Redis lock `lock:auto_topup:{hostId}` (TTL 5 phút), tạo `PaymentIntent (off_session=True, confirm=True)` theo giá cố định của `auto_topup_pack_id`. Thành công -> cộng `topup_credits` (+ `% Bonus`); thất bại -> tắt tạm `auto_topup_enabled` + gửi email cảnh báo SES.
+- **Tiêu chí nghiệm thu (AC)**: Cuộc họp tự nạp thêm Credit mượt mà không ngắt âm thanh.
 
-### `TASK-PAY-06`: Kiểm tra & Kích hoạt Mã Khuyến mãi / Tặng Credit (Promo Redeem)
+### `TASK-PAY-06`: Kiểm tra & Kích hoạt Mã Khuyến mãi (`Promo Redeem` -> ngăn `promo_credits`)
 - **Mã chức năng**: `FR-509.1` | **Scope**: `Backend API & PostgreSQL`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `POST /api/v1/wallets/promo-redeem`.
-  - Nhận `code` (chuỗi ký tự, e.g. `WELCOME50`, `AI2026`).
-  - Mở Transaction PostgreSQL:
-    1. Tìm mã trong `promo_codes WHERE code = :code FOR UPDATE`.
-    2. Nếu không tìm thấy hoặc `is_active == false`: Trả về lỗi `404 Promo code not found or inactive`.
-    3. Nếu `expires_at < now()`: Trả về lỗi `400 Promo code has expired`.
-    4. Nếu `current_uses >= max_uses`: Trả về lỗi `400 Promo code usage limit reached`.
-    5. Kiểm tra bảng `promo_redemptions WHERE promo_code_id = :promoId AND user_id = :userId`: Nếu đã có bản ghi -> Trả về lỗi `400 You have already redeemed this promo code`.
-    6. Cộng tiền vào ví: `UPDATE wallets SET balance = balance + :credit_amount WHERE host_id = :userId`.
-    7. Tăng lượt dùng: `UPDATE promo_codes SET current_uses = current_uses + 1 WHERE id = :promoId`.
-    8. Ghi nhận `promo_redemptions (promo_code_id = :promoId, user_id = :userId, credit_applied = :credit_amount)`.
-    9. Tạo bản ghi `payment_transactions (type = 'PROMO_CREDIT', provider = 'SYSTEM', amount = :credit_amount, status = 'SUCCEEDED')`.
+  - Endpoint `POST /api/v1/wallets/promo-redeem` (nối vào `WalletService.redeem_promo`).
+  - Cộng Credit vào `wallets.promo_credits` (gắn `promo_expires_at`), ghi `promo_redemptions`, `payment_transactions (PROMO_CREDIT)` và `credit_ledger (GRANT_PROMO)`.
 - **Tiêu chí nghiệm thu (AC)**: Tuyệt đối không thể nhập 1 mã 2 lần; hết hạn hoặc hết lượt bị chặn 100%.
 
 ### `TASK-PAY-07`: Xử lý Hoàn tiền Giao dịch Lỗi (Refund Processing)
 - **Mã chức năng**: `FR-604.3` | **Scope**: `Backend Admin & Stripe`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint Admin `POST /api/v1/admin/transactions/{txId}/refund`.
-  - Nhận `reason`, `refundAmount` (tùy chọn, mặc định toàn bộ số tiền nạp).
-  - Nếu giao dịch gốc là Stripe: Gọi Stripe API `stripe.Refund.create(payment_intent=pi_id, amount=refundAmount)`.
-  - Trừ ngược số tiền tương ứng khỏi ví của Host: `UPDATE wallets SET balance = balance - :refundAmount`.
-  - Tạo bản ghi `payment_transactions (type = 'REFUND', amount = -refundAmount, status = 'SUCCEEDED')`.
-- **Tiêu chí nghiệm thu (AC)**: Hoàn tiền Stripe thành công, số dư ví giảm tương ứng có lưu vết kiểm toán.
+  - Endpoint Admin `POST /api/v1/admin/transactions/{txId}/refund`: hoàn tiền Stripe (nếu giao dịch Stripe), trừ ngược số Credit tương ứng, ghi `payment_transactions (REFUND)` & `credit_ledger (REFUND)` kèm Audit Log.
+- **Tiêu chí nghiệm thu (AC)**: Hoàn tiền và đối soát Credit chính xác 100%.
 
 ---
 
@@ -516,32 +452,20 @@
 
 ## Phân hệ 6: Quản lý Phòng & Phiên dịch (Room & Session Lifecycle)
 
-### `TASK-ROOM-01`: Kiểm tra Số dư Khởi tạo Phòng (Pre-flight Balance Check Algorithm)
+### `TASK-ROOM-01`: Kiểm tra Entitlement & Số dư Credit Khởi tạo Phòng (Pre-flight Check)
 - **Mã chức năng**: `FR-201.1` | **Scope**: `Backend Services`
 - **Nghiệp vụ chi tiết**:
-  - Hàm tính toán chi phí trước khi mở phòng:
-    - Input: `sourceLang`, danh sách `targetLangs` ($N$ ngôn ngữ), `autoDegradeTts: bool`.
-    - Ước tính cước phí 1 phút hoạt động tối đa:
-      $$Cost/min = \$0.024\text{ (STT)} + (N \times \$0.015\text{ MT}) + (N \times \$0.016\text{ TTS}) + (10\text{ listeners} \times \$0.005/60)$$
-    - Chi phí tối thiểu bắt buộc để mở phòng:
-      $$MinRequiredBalance = Cost/min \times 10\text{ phút}$$
-    - Ví dụ: Dịch sang 3 thứ tiếng có TTS -> $Cost/min \approx \$0.12$ -> Yêu cầu số dư ví tối thiểu $\ge \$1.20$.
-  - Nếu số dư trong `wallets.balance < MinRequiredBalance`: Chặn mở phòng, trả về `402 Payment Required` kèm số tiền còn thiếu.
-- **Tiêu chí nghiệm thu (AC)**: Không thể tạo phòng khi ví không đủ tiền chạy 10 phút.
+  - Kiểm tra `EntitlementGuard`: `mode` trong `allowedRoomModes`, `len(targetLangs) <= maxTargetLangs`, số phòng đang `ACTIVE` của Host `< maxConcurrentRooms` (`FREE`/`PRO`: 1, `BUSINESS`: 3, `ENTERPRISE`: 10). Vượt gói -> `403 UPGRADE_REQUIRED`.
+  - Ước tính Burn Rate (`Cr/phút`) theo biểu giá Credit (`STT 5.5 Cr/phút`, `MT 3.5 Cr/1k`, `TTS 4.0 Cr/1k`, `Listeners 0.5 Cr/100/phút`); riêng chế độ `1_ON_1` nhân hệ số **2 luồng nói song công**.
+  - Yêu cầu `total_credits >= estimatedBurnRatePerMin × 10 phút` -> Thiếu trả về `402 Payment Required` kèm gợi ý mua `PACK_S/M/L`.
+- **Tiêu chí nghiệm thu (AC)**: Vượt gói trả `403 UPGRADE_REQUIRED`; thiếu Credit trả `402` kèm số Credit còn thiếu.
 
-### `TASK-ROOM-02`: Tạo Phòng Dịch Mới (Create Room)
+### `TASK-ROOM-02`: Tạo Phòng Dịch Mới & Chế độ Lobby Mic Check (Create Room)
 - **Mã chức năng**: `FR-201.2` | **Scope**: `Backend API & PostgreSQL`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `POST /api/v1/rooms`.
-  - Nhận: `title`, `mode` (`1_ON_1` hoặc `BROADCAST`), `sourceLang`, `targetLangs` (mảng 1-10 mã), `passcode` (tùy chọn), `allowListenerDownload` (mặc định `false`), `vocabularyId` (tùy chọn).
-  - Chạy `TASK-ROOM-01` kiểm tra số dư.
-  - Sinh mã phòng ngẫu nhiên duy nhất gồm 6 chữ số: `roomCode` dạng `XXX-XXX` (e.g. `849-201`).
-  - Nếu có `passcode`: Băm mật khẩu bằng Bcrypt/Argon2id -> lưu `password_hash`.
-  - Giới hạn người nghe mặc định: `1_ON_1` = 2 người; `BROADCAST` = 1.000 người.
-  - Lưu vào bảng `rooms` với trạng thái `status = 'CREATED'`.
-  - Khởi tạo key metadata trên Redis: `HSET room:{roomId}:meta status CREATED host_id {hostId}`.
-  - Trả về: `roomId`, `roomCode`, `joinUrl`, `estimatedBurnRatePerMin`.
-- **Tiêu chí nghiệm thu (AC)**: Tạo phòng thành công trong $< 100ms$, sinh mã phòng 6 số duy nhất.
+  - Endpoint `POST /api/v1/rooms`: chạy `TASK-ROOM-01`, sinh `roomCode` (`XXX-XXX`), băm `passcode` (chỉ `PRO+`), lưu `rooms` với trạng thái `IDLE` (cho phép Host kiểm tra micro & đèn VAD cục bộ `0 Cr` trước khi bấm `START`).
+  - Giới hạn người nghe mặc định lấy từ `entitlements.maxListeners` (`FREE` 2 / `PRO` 100 / `BUSINESS` 300 / `ENTERPRISE` 1.000).
+- **Tiêu chí nghiệm thu (AC)**: Tạo phòng `< 100ms`, không trừ Credit khi ở trạng thái `IDLE`.
 
 ### `TASK-ROOM-03`: Xem Danh sách Phòng do Host Tạo (List Rooms)
 - **Mã chức năng**: `FR-201.3` | **Scope**: `Backend API`
@@ -658,6 +582,19 @@
   - Cập nhật Redis: `SETEX room:{roomId}:presence:{guestId} 45 {lang}`.
   - Nếu quá 45 giây không có heartbeat (do đóng tab, mất mạng): Redis Key tự hết hạn, kích hoạt worker ngầm giảm biến đếm sĩ số và giảm `tts_count` của ngôn ngữ đó nếu đang bật loa.
 - **Tiêu chí nghiệm thu (AC)**: Sĩ số phòng tự động cập nhật đúng thực tế khi người nghe rời phòng đột ngột.
+
+### `TASK-ROOM-14`: Lên lịch Phòng trước (`Scheduled Rooms`) & Quản lý Nhiều Diễn giả (`Multi-Speaker / Co-Host`)
+- **Mã chức năng**: `FR-207` | **Scope**: `Backend API & EntitlementGuard`
+- **Nghiệp vụ chi tiết**:
+  - Hỗ trợ `scheduledStartAt` khi tạo phòng (`PRO+`) -> sinh sẵn `roomCode`/`joinUrl`/QR Code để gửi trước sự kiện.
+  - Endpoint `POST /api/v1/rooms/{roomId}/speakers` cấp/thu hồi quyền phát biểu cho Co-Host (`BUSINESS`: tối đa 3, `ENTERPRISE`: tối đa 10).
+- **Tiêu chí nghiệm thu (AC)**: Người nghe quét QR trước giờ thấy màn hình chờ lịch sự; vượt số lượng Speaker trả `403 UPGRADE_REQUIRED`.
+
+### `TASK-ROOM-15`: Tùy biến Thương hiệu (`Custom Branding`), Chọn Giọng TTS & Lọc từ Nhạy cảm
+- **Mã chức năng**: `FR-208` | **Scope**: `Backend API, AI Pipeline & Frontend`
+- **Nghiệp vụ chi tiết**:
+  - Lưu `branding_config` (Logo/Màu cho `BUSINESS`, ẩn watermark White-label cho `ENTERPRISE`), `tts_voice_config` (chọn giọng Nam/Nữ `BUSINESS+`), `profanity_filter_enabled` (`PRO+` -> gắn `VocabularyFilterMethod=mask` sang Amazon Transcribe).
+- **Tiêu chí nghiệm thu (AC)**: Cấu hình áp dụng tức thời trên màn hình Listener và pipeline STT/TTS.
 
 ---
 
@@ -790,24 +727,22 @@
     - Thu về Map bản dịch: `{"en-US": "Hello", "ja-JP": "こんにちは", "ko-KR": "안녕하세요"}`.
 - **Tiêu chí nghiệm thu (AC)**: Dịch song song sang 10 ngôn ngữ hoàn tất trong $< 150ms$.
 
-### `TASK-AI-05`: Kiểm tra Biến đếm Người nghe Bật loa (Demand-driven TTS Guard)
+### `TASK-AI-05`: Kiểm tra Quyền TTS & Biến đếm Người nghe Bật loa (Demand-driven TTS Guard)
 - **Mã chức năng**: `FR-305.1` | **Scope**: `Backend Services & Redis`
 - **Nghiệp vụ chi tiết**:
-  - Trước khi gọi Amazon Polly cho ngôn ngữ `lang`:
-    - Đọc Redis: `count = HGET room:{roomId}:tts_count {lang}`.
-    - **Quy tắc bảo vệ chi phí nghiêm ngặt**:
-      - Nếu `count == 0` hoặc key không tồn tại -> **Tuyệt đối không gọi Polly**, bỏ qua khâu sinh audio cho ngôn ngữ đó.
-      - Nếu `count > 0` -> Đưa vào danh sách cần sinh giọng đọc.
-- **Tiêu chí nghiệm thu (AC)**: Tiết kiệm $100\%$ chi phí Polly cho mọi ngôn ngữ không có người bấm nghe loa.
+  - Kiểm tra `entitlements.allowTts == true` (`PRO+`) và đọc `count = HGET room:{roomId}:tts_count {lang}`:
+    - Nếu `allowTts == false` hoặc `count <= 0` -> **Tuyệt đối không gọi TTS** (`0 Cr`).
+    - Nếu `count > 0` -> đưa vào danh sách sinh giọng đọc.
+- **Tiêu chí nghiệm thu (AC)**: Tiết kiệm `100%` chi phí TTS cho gói Free và mọi ngôn ngữ không có người bật loa.
 
-### `TASK-AI-06`: Tổng hợp Giọng đọc Amazon Polly Neural & Upload S3 CDN
-- **Mã chức năng**: `FR-305.2` | **Scope**: `Backend Integrations & AWS Polly`
+### `TASK-AI-06`: Tổng hợp Giọng đọc Multi-Provider Neural TTS (`Polly` + `Azure Speech vi-VN`) & S3 CDN
+- **Mã chức năng**: `FR-305.2` | **Scope**: `Backend Integrations (app/integrations/tts.py)`
 - **Nghiệp vụ chi tiết**:
-  - Với các ngôn ngữ có `tts_count > 0`:
-    - Gọi Amazon Polly: `Engine = "neural"`, `OutputFormat = "mp3"`, `VoiceId` phù hợp với ngôn ngữ và giới tính đã cấu hình.
-    - Đẩy luồng audio `.mp3` lên S3: `s3://.../tts/{roomId}/{segmentId}_{lang}.mp3` (S3 Lifecycle xóa sau 24h).
-    - Tạo CDN URL: `https://cdn.domain.com/tts/{roomId}/{segmentId}_{lang}.mp3`.
-- **Tiêu chí nghiệm thu (AC)**: Sinh xong file âm thanh và có URL CloudFront trong $< 400ms$.
+  - Triển khai `TTSProviderAdapter`:
+    - **Primary**: Amazon Polly Neural (`en-US`, `ja-JP`, `ko-KR`, `zh-CN`, `fr-FR`, `de-DE`, `es-ES`...) chọn `VoiceId` theo `rooms.tts_voice_config`.
+    - **Azure AI Speech Neural (`southeastasia` Singapore)**: Gọi REST endpoint `POST https://{region}.tts.speech.microsoft.com/cognitiveservices/v1` bằng **`httpx.AsyncClient`** (SSML + `audio-24khz-48kbitrate-mono-mp3`, không dùng C++ SDK) cho **Tiếng Việt (`vi-VN-HoaiMyNeural` / `vi-VN-NamMinhNeural`)**, `th-TH`, `id-ID`; key lưu trên AWS Secrets Manager (`AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`); tự động hạ `Text-only` (`0 Cr`) khi lỗi `5xx`/timeout hoặc chưa cấu hình.
+  - Upload `.mp3` lên S3 (`s3://.../tts/{roomId}/{segmentId}_{lang}.mp3`, Lifecycle 24h) -> trả CloudFront CDN URL `< 400ms`.
+- **Tiêu chí nghiệm thu (AC)**: Hỗ trợ phát giọng đọc Nam/Nữ chuẩn cho cả Tiếng Việt `vi-VN` lẫn các ngôn ngữ quốc tế trong `< 400ms`; offline mock hoạt động ở `ENV=local/test`.
 
 ### `TASK-AI-07`: Đánh dấu Chốt câu & Cắt tỉa Bộ đệm Âm thanh (Commit Segment)
 - **Mã chức năng**: `FR-306.1` | **Scope**: `Backend AI Pipeline & Redis`
@@ -862,96 +797,59 @@
 
 ---
 
-## Phân hệ 9: Đo đếm & Tính cước 10 giây (Realtime Micro-Billing Engine)
+## Phân hệ 9: Đo đếm & Tính cước Theo Từng Giây (Per-Second Credit Billing Engine)
 
-### `TASK-MET-01`: Đo đếm Lưu lượng Phòng theo Cửa sổ 10 Giây
+### `TASK-MET-01`: Đo đếm Lưu lượng Chính xác Theo Từng Giây (`1s Redis Metering`)
 - **Mã chức năng**: `FR-505.1` | **Scope**: `Backend Billing Worker`
 - **Nghiệp vụ chi tiết**:
-  - Trong mỗi cửa sổ 10 giây, worker tổng hợp số liệu tiêu thụ của từng phòng `ACTIVE`:
-    - `audioSeconds`: Số giây có tiếng nói thực tế (`vad_flag == 1`).
-    - `translatedChars`: Tổng số ký tự văn bản gửi dịch qua Amazon Translate.
-    - `ttsChars`: Tổng số ký tự văn bản gửi đọc qua Amazon Polly.
-    - `listenerCount`: Số lượng người nghe trung bình trong 10 giây.
-  - Reset bộ đếm chu kỳ trên Redis để chuẩn bị cho 10 giây tiếp theo.
-- **Tiêu chí nghiệm thu (AC)**: Thu thập số liệu đo lường chính xác, không thất thoát lưu lượng.
+  - Vòng lặp mỗi **1 giây** thu thập chính xác mức sử dụng thực tế của từng phòng `ACTIVE` (không làm tròn block 10s):
+    - `audio_seconds`: Số giây có tiếng nói thực tế (`vad_flag == 1`, bước `0.1s`, tính cả 2 luồng ở chế độ `1-on-1`).
+    - `mt_chars` & `tts_chars`: Ký tự dịch máy & ký tự TTS phát sinh trong giây đó.
+    - `listener_seconds`: Tổng người-giây kết nối (cộng số lượng listener đang online tại giây đó).
+  - Loại trừ `100%` mọi giây/ký tự phát sinh khi AI provider trả lỗi `5xx` (`0 Cr`).
+- **Tiêu chí nghiệm thu (AC)**: Nói `3.4s` hay nghe `23s` chỉ tính đúng số giây thực tế đó.
 
-### `TASK-MET-02`: Tính toán Chi phí Vi mô 10s theo Công thức Chuẩn hóa
+### `TASK-MET-02`: Quy đổi Credit Theo Công thức Cost-Plus (`1 USD = 100 Credits`)
 - **Mã chức năng**: `FR-506.1` | **Scope**: `Backend Billing Worker`
 - **Nghiệp vụ chi tiết**:
-  - Áp dụng công thức 4 thành phần:
-    $$\text{Cost}_{10s} = \text{Fee}_{STT} + \text{Fee}_{MT} + \text{Fee}_{TTS} + \text{Fee}_{Listener}$$
-    - $\text{Fee}_{STT} = (\text{audioSeconds} / 60) \times \$0.024$
-    - $\text{Fee}_{MT} = (\text{translatedChars} / 1,000,000) \times \$15.00$
-    - $\text{Fee}_{TTS} = (\text{ttsChars} / 1,000,000) \times \$16.00$
-    - $\text{Fee}_{Listener} = (\text{listenerCount} \times 10 / 3600) \times \$0.005$
-  - Làm tròn chi phí đến 4 chữ số thập phân (`NUMERIC(10, 4)`).
-- **Tiêu chí nghiệm thu (AC)**: Tính toán khớp 100% theo bảng giá cấu hình, sai số $< 0.01\%$.
+  - Áp dụng biểu giá Credit (đảm bảo Gross Margin `>= 55% – 65%`, cấu hình động từ DB/Redis):
+    - $\text{Credits} = (\frac{S_{\text{audio}}}{60} \times 5.5) + (\frac{C_{\text{mt}}}{1000} \times 3.5) + (\frac{C_{\text{tts}}}{1000} \times 4.0) + (\frac{S_{\text{listener}}}{6000} \times 0.5)$
+  - Lưu chính xác 2 chữ số thập phân (`NUMERIC(12, 2)`), đồng thời tính song song AWS COGS USD nội bộ cho Admin.
+- **Tiêu chí nghiệm thu (AC)**: Khớp 100% biểu giá hiện hành, sai số `< 0.01 Cr`.
 
-### `TASK-MET-03`: Khấu trừ Ví Nguyên tử & Ghi Sổ cái PostgreSQL (Atomic Ledger)
-- **Mã chức năng**: `FR-506.2` | **Scope**: `Backend Database Transaction`
+### `TASK-MET-03`: Khấu trừ 3 Ngăn Nguyên tử (`Promo -> Plan -> Top-up`) & Batch ACID Flush
+- **Mã chức năng**: `FR-506.2` | **Scope**: `Backend Database Transaction & Redis Lua`
 - **Nghiệp vụ chi tiết**:
-  - Mở Transaction PostgreSQL:
-    1. Trừ tiền nguyên tử trong `wallets`:
-       ```sql
-       UPDATE wallets 
-       SET balance = balance - :cost, updated_at = now() 
-       WHERE host_id = :hostId AND balance >= :cost 
-       RETURNING balance;
-       ```
-    2. Ghi bản ghi bất biến vào `usage_ledger`:
-       ```sql
-       INSERT INTO usage_ledger (room_id, host_id, window_timestamp, audio_seconds, translated_chars, tts_chars, listener_count, cost_amount, balance_after)
-       VALUES (:roomId, :hostId, now(), :audioSec, :mtChars, :ttsChars, :listeners, :cost, :newBalance);
-       ```
-    3. Cập nhật tổng chi phí phòng: `UPDATE rooms SET total_cost = total_cost + :cost WHERE id = :roomId`.
-- **Tiêu chí nghiệm thu (AC)**: Cam kết số dư ví không bao giờ bị âm; mọi khoản trừ đều có dòng đối soát trong `usage_ledger`.
+  - Trừ realtime mỗi **1 giây** trên Redis `wallet:{hostId}:credits` qua Lua script nguyên tử (an toàn khi Host mở nhiều phòng đồng thời theo `maxConcurrentRooms`).
+  - Flush nguyên tử xuống PostgreSQL định kỳ mỗi **15 giây** VÀ **ngay lập tức** khi `PAUSE` / `END_ROOM` / `QUOTA_EXHAUSTED`:
+    1. Khóa dòng `wallets` trừ theo thứ tự `promo_credits -> plan_credits -> topup_credits` (`CHECK >= 0`).
+    2. Ghi `usage_ledger` kèm `duration_seconds`, `audio_seconds`, `listener_seconds`, `credits_deducted`, `deducted_breakdown`.
+    3. Cập nhật `rooms.total_credits_used`. Khi `END_ROOM`, ghi 1 dòng tổng hợp `ROOM_USAGE` vào `credit_ledger`.
+- **Tiêu chí nghiệm thu (AC)**: Không bao giờ âm cả 3 ngăn; tổng `usage_ledger` khớp 100% `credit_ledger`.
 
-### `TASK-MET-04`: Đồng bộ Số dư lên Redis & Phát Bản tin BILLING_TICK
+### `TASK-MET-04`: Phát Bản tin `BILLING_TICK` (3 Ngăn Credit & Burn Rate) Mỗi Giây
 - **Mã chức năng**: `FR-504.2` | **Scope**: `Backend WebSocket & Redis`
 - **Nghiệp vụ chi tiết**:
-  - Cập nhật số dư mới nhất vào Redis: `SET wallet:{hostId}:balance {newBalance}`.
-  - Tính tốc độ đốt tiền ước tính mỗi phút (`burnRatePerMin`) và số phút còn lại (`remainingMinutes`).
-  - Gửi gói tin WebSocket `BILLING_TICK` về màn hình Host:
-    ```json
-    {
-      "event": "BILLING_TICK",
-      "balanceUsd": 4.20,
-      "sessionCostUsd": 1.85,
-      "burnRatePerMinUsd": 0.15,
-      "estimatedRemainingMinutes": 28.0,
-      "warningLevel": "NONE"
-    }
-    ```
-- **Tiêu chí nghiệm thu (AC)**: Màn hình Host cập nhật mượt mà đồng hồ cước mỗi 10 giây.
+  - Gửi gói JSON `BILLING_TICK` (`totalCredits`, `buckets: {promo, plan, topup}`, `sessionCreditsUsed`, `burnRatePerMinCredits`, `estimatedRemainingMinutes`, `warningLevel`) về màn hình Host.
+- **Tiêu chí nghiệm thu (AC)**: Đồng hồ Credit nhảy mượt, phản ánh đúng mức tiêu thụ thực tế.
 
-### `TASK-MET-05`: Xử lý Cảnh báo Số dư Thấp dưới 5 Phút (LOW_BALANCE_WARNING)
+### `TASK-MET-05`: Xử lý Cảnh báo Số dư Thấp dưới 5 Phút (`LOW_BALANCE_WARNING`)
 - **Mã chức năng**: `FR-507.1` | **Scope**: `Backend Billing & Frontend Modal`
 - **Nghiệp vụ chi tiết**:
-  - Khi `remainingMinutes < 5.0` phút:
-    - Gửi gói tin `BILLING_TICK` với cờ `warningLevel = "LOW_BALANCE_WARNING"`.
-    - Phía Frontend tự động hiển thị Banner vàng cảnh báo số dư thấp.
-    - Mở Popup Nạp tiền nhanh tại chỗ (`In-room Top-up Modal`) cho phép Host quét QR hoặc bấm thẻ nạp thêm mà không cần thoát khỏi phòng.
-- **Tiêu chí nghiệm thu (AC)**: Cảnh báo kịp thời trước 5 phút để Host nạp tiền tiếp.
+  - Khi `estimatedRemainingMinutes < 5.0` phút -> gửi `LOW_BALANCE_WARNING` + mở Popup mua nhanh `PACK_S/M/L` ngay trong phòng không ngắt âm thanh.
+- **Tiêu chí nghiệm thu (AC)**: Cảnh báo chính xác tới từng giây.
 
-### `TASK-MET-06`: Tự động Hạ cấp Dịch vụ Tắt TTS khi Dưới 1 Phút (GRACEFUL_DEGRADATION)
+### `TASK-MET-06`: Tự động Hạ cấp Dịch vụ Tắt TTS khi Dưới 1 Phút (`GRACEFUL_DEGRADATION`)
 - **Mã chức năng**: `FR-507.3` | **Scope**: `Backend Billing Worker`
 - **Nghiệp vụ chi tiết**:
-  - Khi `remainingMinutes < 1.0` phút VÀ `wallets.auto_degrade_tts == true`:
-    - Gửi gói tin `warningLevel = "GRACEFUL_DEGRADATION"`.
-    - Hệ thống tự động đặt `tts_count = 0` cho toàn bộ ngôn ngữ trên Redis.
-    - Ngắt hoàn toàn việc gọi Amazon Polly. Chỉ duy trì nhận diện giọng nói và dịch phụ đề text để tiết kiệm 70% chi phí.
-    - Thông báo cho Host và người nghe: *"Đã tạm tắt giọng đọc để kéo dài thời gian hiển thị phụ đề"*.
-- **Tiêu chí nghiệm thu (AC)**: Kéo dài thời gian duy trì phòng thêm gấp 3 lần khi sắp cạn ví.
+  - Khi `estimatedRemainingMinutes < 1.0` phút VÀ gói có `allowAutoDegradeTts` VÀ `wallets.auto_degrade_tts == true` -> đặt `tts_count = 0`, ngắt TTS, chỉ giữ phụ đề text.
+- **Tiêu chí nghiệm thu (AC)**: Kéo dài thời gian phiên họp mà không mất phụ đề.
 
-### `TASK-MET-07`: Tự động Đóng Phòng An toàn khi Hết Số dư (QUOTA_EXHAUSTED)
+### `TASK-MET-07`: Tự động Đóng Phòng An toàn khi Hết Credit (`QUOTA_EXHAUSTED`)
 - **Mã chức năng**: `FR-507.4` | **Scope**: `Backend Billing Worker`
 - **Nghiệp vụ chi tiết**:
-  - Khi `balance <= 0.00`:
-    - Đợi diễn giả dứt câu đang nói (`isFinal = true`).
-    - Gửi bản tin `QUOTA_EXHAUSTED` tới Host và toàn bộ Người nghe.
-    - Chuyển trạng thái phòng sang `ENDED`.
-    - Đóng kết nối WebSocket và kích hoạt đóng gói biên bản S3.
-- **Tiêu chí nghiệm thu (AC)**: Phòng đóng an toàn, không bị mất câu nói cuối cùng, không âm tiền ví.
+  - Khi `total_credits <= 0.00` (hoặc gói `FREE` đạt giới hạn 15 phút/phòng): đợi dứt câu `Final`, flush chính xác phần giây lẻ cuối cùng, ghi dòng `ROOM_USAGE` vào `credit_ledger`, đóng phòng và kích hoạt đóng gói S3.
+- **Tiêu chí nghiệm thu (AC)**: Không mất câu cuối, không âm Credit.
 
 ---
 
@@ -1009,32 +907,19 @@
   - Upload lên S3: `transcript_comparison.csv`.
 - **Tiêu chí nghiệm thu (AC)**: Mở bằng Microsoft Excel và Google Sheets hiển thị tiếng Việt và tiếng Nhật chuẩn font.
 
-### `TASK-TRN-06`: API Tải File Biên bản Dịch với Phân quyền Bảo mật
-- **Mã chức năng**: `FR-406.5` | **Scope**: `Backend API & S3 Presigned URL`
+### `TASK-TRN-06`: API Tải & Xóa File Biên bản Dịch (Phân quyền Gói, Listener & GDPR)
+- **Mã chức năng**: `FR-406.5`, `FR-107` | **Scope**: `Backend API & S3 Presigned URL`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `GET /api/v1/rooms/{roomId}/transcripts/export`.
-  - Query params: `format` (`srt`, `vtt`, `txt`, `csv`, `json`), `lang`.
-  - **Kiểm tra quyền**:
-    - Host: Luôn luôn có quyền tải.
-    - Listener: Kiểm tra `rooms.allow_listener_download`. Nếu `false` -> Trả về `403 Forbidden: Host has disabled transcript downloads for listeners`.
-  - Sinh Amazon S3 Presigned URL GET thời hạn 60 phút.
-  - Trả về `downloadUrl`.
-- **Tiêu chí nghiệm thu (AC)**: Listener không thể tải lậu file nếu Host không cho phép; URL tải trực tiếp từ S3.
+  - `GET /api/v1/rooms/{roomId}/transcripts/export`: kiểm tra `format` thuộc `entitlements.exportFormats` (kèm 14 ngày ân hạn khi hạ gói) và quyền Listener (`allow_listener_download`), trả S3 Presigned URL 60 phút.
+  - `DELETE /api/v1/rooms/{roomId}/transcripts` (chỉ Host): xóa toàn bộ file S3 của phòng & cập nhật metadata (GDPR/PDPA).
+- **Tiêu chí nghiệm thu (AC)**: Chặn tải sai quyền gói/Listener với `403`; xóa S3 hoàn tất `< 5s`.
 
-### `TASK-TRN-07`: Host Kích hoạt Tóm tắt Cuộc họp AI qua Amazon Bedrock
+### `TASK-TRN-07`: Host Kích hoạt Tóm tắt Cuộc họp AI qua Amazon Bedrock (`15 Cr` / `25 Cr`)
 - **Mã chức năng**: `FR-407.1` | **Scope**: `Backend API & Amazon Bedrock`
 - **Nghiệp vụ chi tiết**:
-  - Endpoint `POST /api/v1/rooms/{roomId}/summary`.
-  - Chỉ Host có quyền gọi.
-  - Gọi Background Task sinh tóm tắt bằng Amazon Bedrock (`Claude 3.5 Haiku` hoặc `Nova Lite`):
-    - Đọc nội dung `master.json` từ S3.
-    - Prompt trích xuất:
-      1. `overview`: Tóm tắt tổng quan chủ đề cốt lõi cuộc họp.
-      2. `keyTakeaways`: Các luận điểm chính kèm mốc thời gian `timestamp` định dạng `[mm:ss]`.
-      3. `actionItems`: Danh sách các quyết định hoặc việc cần làm được nhắc tới trong bài nói.
-    - Tính chi phí Bedrock thực tế (khoảng `$0.01` – `$0.02`), trừ phí 1 lần duy nhất vào ví của Host.
-    - Lưu file `summary.json` lên S3 và cập nhật `room_transcripts.summary_status = 'READY'`.
-- **Tiêu chí nghiệm thu (AC)**: Sinh xong tóm tắt chất lượng cao cho cuộc họp 1 giờ trong $< 8\text{ giây}$.
+  - Endpoint `POST /api/v1/rooms/{roomId}/summary` (chỉ Host, kiểm tra `entitlements.aiSummaryLevel`: `PRO` ngôn ngữ gốc `15 Cr`, `BUSINESS+` đa ngôn ngữ `25 Cr`).
+  - Đọc `master.json` từ S3, gọi Bedrock (`Claude 3.5 Haiku` / `Nova Lite`), trừ Credit 1 lần qua thứ tự 3 ngăn `Promo -> Plan -> Top-up` + ghi `credit_ledger (AI_SUMMARY)`, lưu `summary.json` lên S3 và gửi SES notification khi xong.
+- **Tiêu chí nghiệm thu (AC)**: Sinh tóm tắt cuộc họp 1 giờ `< 8s`; các lần xem lại sau = `0 Cr`.
 
 ### `TASK-TRN-08`: Cơ chế Cache $0 cho Bản Tóm tắt AI đã Tạo
 - **Mã chức năng**: `FR-407.2` | **Scope**: `Backend Services`
@@ -1157,7 +1042,7 @@
 
 ## Phân hệ 12: Màn hình Giao diện Người dùng Web (Next.js 15 UI Screens)
 
-### `TASK-UI-01`: SCR-01 Form Đăng ký Host kèm Password Meter & OTP Input
+### `TASK-UI-01`: SCR-01 Form Đăng ký Host kèm Password Meter & OTP Input `[DONE]`
 - **Mã chức năng**: `SCR-01.1` | **Scope**: `Frontend Next.js App Router`
 - **Nghiệp vụ chi tiết**:
   - Trang `/register`:
@@ -1169,7 +1054,7 @@
     - Đồng hồ đếm ngược 60 giây và nút Gửi lại mã OTP (`TASK-AUTH-03`).
 - **Tiêu chí nghiệm thu (AC)**: Form validate mượt mà bằng Zod, tự động chuyển trang khi nhập xong OTP 6 số.
 
-### `TASK-UI-02`: SCR-01 Form Đăng nhập Email/Password & Social SSO
+### `TASK-UI-02`: SCR-01 Form Đăng nhập Email/Password & Social SSO `[DONE]` *(Email/Password; SSO chờ `TASK-AUTH-05..06`)*
 - **Mã chức năng**: `SCR-01.2` | **Scope**: `Frontend Next.js`
 - **Nghiệp vụ chi tiết**:
   - Trang `/login`:
@@ -1178,7 +1063,7 @@
     - Link chuyển tới màn hình Quên mật khẩu và Đăng ký.
 - **Tiêu chí nghiệm thu (AC)**: Đăng nhập thành công lưu token và chuyển hướng ngay về `/dashboard`.
 
-### `TASK-UI-03`: SCR-01 Form Quên mật khẩu & Đặt lại mật khẩu
+### `TASK-UI-03`: SCR-01 Form Quên mật khẩu & Đặt lại mật khẩu `[DONE]`
 - **Mã chức năng**: `SCR-01.3` | **Scope**: `Frontend Next.js`
 - **Nghiệp vụ chi tiết**:
   - Trang `/forgot-password`: Nhập email nhận mã OTP khôi phục.
@@ -1257,49 +1142,49 @@
       - Nếu người dùng vuốt ngược lên để đọc lại câu cũ: Tự động tạm ngắt auto-scroll; có nút bấm "Cuộn xuống mới nhất".
 - **Tiêu chí nghiệm thu (AC)**: Giao diện mượt mà trên iPhone/Safari và Android/Chrome; âm thanh dịch phát liên tục.
 
-### `TASK-UI-10`: SCR-05 Màn hình Lịch sử Dịch thuật & AI Tóm tắt Cuộc họp
-- **Mã chức năng**: `SCR-05.1` | **Scope**: `Frontend Next.js`
+### `TASK-UI-10`: SCR-05 Màn hình Lịch sử Dịch thuật, AI Tóm tắt & Session Analytics
+- **Mã chức năng**: `SCR-05.1`, `FR-408` | **Scope**: `Frontend Next.js`
 - **Nghiệp vụ chi tiết**:
   - Trang `/dashboard/rooms/[roomId]/history`:
-    - **Tab 1 — Toàn bộ Biên bản (Full Transcript)**: Đọc lại toàn bộ nội dung từng câu, ô tìm kiếm từ khóa, đổi ngôn ngữ đối chiếu, cụm nút tải file: `.TXT`, `.SRT`, `.VTT`, `.CSV`.
-    - **Tab 2 — Tóm tắt Cuộc họp AI (AI Summary)**:
-      - Nút "✨ Tóm tắt nội dung bằng AI" (kèm chi phí ước tính).
-      - Hiển thị trực quan 3 phần: **Chủ đề cốt lõi**, **Các luận điểm chính kèm mốc thời gian [mm:ss] bấm vào nhảy ngay tới câu tương ứng trong Tab 1**, **Đầu việc cần làm Action Items**.
-      - Dropdown đổi ngôn ngữ tóm tắt, nút tải file Markdown.
-    - **Tab 3 — Chi phí Phiên (Chỉ Host thấy)**: Đồ thị cột bóc tách 4 khoản phí theo từng 10 giây.
-- **Tiêu chí nghiệm thu (AC)**: Bấm vào mốc thời gian trong tóm tắt AI tự động cuộn và highlight câu nói tương ứng.
+    - **Tab 1 — Toàn bộ Biên bản (Full Transcript)**: Đọc lại theo từng câu, tìm kiếm từ khóa, đổi ngôn ngữ, cụm nút tải theo `exportFormats` của gói, nút **Xóa biên bản (GDPR)**.
+    - **Tab 2 — Tóm tắt Cuộc họp AI (AI Summary)**: Nút "✨ Tóm tắt AI" (`15 Cr` Pro / `25 Cr` Business+), bấm mốc `[mm:ss]` nhảy tới câu tương ứng ở Tab 1, đổi ngôn ngữ, tải `.MD`.
+    - **Tab 3 — Phân tích & Chi phí Phiên (Chỉ Host thấy)**: Biểu đồ phân bố ngôn ngữ, đỉnh người nghe (`GET /rooms/{id}/analytics`, xuất CSV/PDF theo gói) và bóc tách Credit tiêu thụ theo từng giây.
+- **Tiêu chí nghiệm thu (AC)**: Bấm mốc thời gian nhảy đúng câu; xuất báo cáo theo đúng quyền gói.
 
-### `TASK-UI-11`: SCR-06 Màn hình Quản lý Ví, Thanh toán & Mã Khuyến mãi
+### `TASK-UI-11`: SCR-06 Màn hình Gói Dịch vụ, Ví Credit, Lịch sử Nạp & Lịch sử Sử dụng (4 Tab)
 - **Mã chức năng**: `SCR-06.1` | **Scope**: `Frontend Next.js`
 - **Nghiệp vụ chi tiết**:
-  - Trang `/dashboard/billing`:
-    - Bảng Lịch sử giao dịch ví: Phân trang, lọc theo nạp tiền / trừ cước / khuyến mãi, nút tải biên lai PDF.
-    - Cụm Cài đặt Tự động Nạp tiền (Auto Top-up): Bật/tắt, đặt ngưỡng tiền, quản lý thẻ tín dụng đã lưu.
-    - Form Nhập Mã Khuyến Mãi (Promo Code): Ô nhập mã + nút "Áp dụng", cộng tiền ngay lập tức.
-- **Tiêu chí nghiệm thu (AC)**: Nhập mã promo cộng tiền ngay; tải biên lai PDF hiển thị chuẩn thông tin công ty.
+  - Trang `/dashboard/billing` với **4 Tab**:
+    1. **Gói dịch vụ (Plans)**: So sánh 4 gói `FREE`/`PRO`/`BUSINESS`/`ENTERPRISE`, Nâng cấp / Hủy gia hạn.
+    2. **Mua thêm Credit (Top-up Packs)**: Chọn `PACK_S`/`M`/`L` hiển thị rõ `+Bonus%` theo gói + nhập Promo Code + cài đặt Auto Top-up (`BUSINESS+`).
+    3. **Lịch sử Nạp tiền (`topup-history`)**: Phân trang, lọc loại/cổng/ngày, nút tải hóa đơn PDF VAT.
+    4. **Lịch sử Sử dụng (`usage-history`)**: Bảng `credit_ledger` theo từng phiên / AI Summary / hết hạn; bấm từng dòng mở Drawer bóc tách chi tiết từng giây & xuất CSV.
+- **Tiêu chí nghiệm thu (AC)**: 4 tab đồng bộ real-time, đối soát minh bạch từng ngăn Credit.
 
 ---
 
 ## 4. Kế hoạch Thực hiện Tuần tự theo Chặng (Execution Stages)
 
+> Chi tiết phân tầng ưu tiên phát hành **`P0 (MVP v1.0)` / `P1 (Growth v1.1)` / `P2 (Enterprise v2.0)`** xem tại [epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md).
+
 ```text
-[Chặng 1: Nền tảng Core & Database] (TASK-DB-01 .. TASK-DB-03)
+[Chặng 1: Nền tảng Core & Database] (TASK-DB-01 .. TASK-DB-03) [DONE]
      │
-[Chặng 2: Xác thực & Hồ sơ Cá nhân] (TASK-AUTH-01 .. 11, TASK-PROF-01 .. 06)
+[Chặng 2: Xác thực & Hồ sơ Cá nhân] (TASK-AUTH-01..11 [8/11 DONE], TASK-PROF-01..06)
      │
-[Chặng 3: CRUD Ví, Nạp tiền & Promo] (TASK-WAL-01 .. 07, TASK-PAY-01 .. 07)
+[Chặng 3: 4 Gói cố định, Entitlements, Ví Credit 3 Ngăn & Thanh toán] (TASK-PLAN-01..04, TASK-WAL-01..07, TASK-PAY-01..07)
      │
-[Chặng 4: Từ điển & Quản lý Phòng] (TASK-VOC-01 .. 08, TASK-ROOM-01 .. 13)
+[Chặng 4: Từ điển, Quản lý Phòng, Mic Check & Tính năng Theo Gói] (TASK-VOC-01..08, TASK-ROOM-01..15)
      │
-[Chặng 5: Thu âm & WebSocket Nhị phân] (TASK-AUD-01 .. 08)
+[Chặng 5: Thu âm & WebSocket Nhị phân] (TASK-AUD-01..08)
      │
-[Chặng 6: Pipeline AI Streaming & Fanout] (TASK-AI-01 .. 11)
+[Chặng 6: Pipeline AI Streaming, Multi-Provider TTS (vi-VN) & Fan-out] (TASK-AI-01..11)
      │
-[Chặng 7: Động cơ Tính cước 10s & Cạn ví] (TASK-MET-01 .. 07)
+[Chặng 7: Động cơ Tính cước Theo Từng Giây & Cạn Credit] (TASK-MET-01..07)
      │
-[Chặng 8: Đóng gói S3 & AI Bedrock Summary] (TASK-TRN-01 .. 10)
+[Chặng 8: Đóng gói S3, GDPR, Bedrock Summary & Analytics] (TASK-TRN-01..10)
      │
-[Chặng 9: Màn hình Giao diện Next.js 15] (TASK-UI-01 .. 11)
+[Chặng 9: Màn hình Giao diện Next.js 15] (TASK-UI-01..11 [3/11 DONE])
      │
-[Chặng 10: HA, Handover 0ms & Admin Portal] (TASK-OPS-01 .. 08)
+[Chặng 10: HA, Handover 0ms, Observability & Admin Portal] (TASK-OPS-01..08)
 ```
