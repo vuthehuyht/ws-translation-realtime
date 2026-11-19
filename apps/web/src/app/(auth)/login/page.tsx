@@ -83,7 +83,7 @@ function LoginPageContent() {
       <AudioTechHero variant="login" className="w-full" />
 
       {/* Right Column: Clean SaaS Login Form */}
-      <div className="flex items-center justify-center p-6 sm:p-10 bg-card">
+      <div className="flex items-center justify-center bg-card px-6 pt-12 pb-6 sm:px-10 sm:pt-16 sm:pb-8">
         <LoginForm
           onSubmitSuccess={handleLoginSuccess}
           serverError={serverError}
