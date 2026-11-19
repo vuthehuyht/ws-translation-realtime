@@ -1,7 +1,7 @@
 # Đặc tả Hợp đồng API, Giao thức WebSocket & Danh mục Màn hình Giao diện (API Contracts, WebSocket Schemas & UI/UX Specs)
 
 - **Mã tài liệu**: `DOC-04-API-UI`
-- **Phiên bản**: `2.1` (Bổ sung GDPR Delete, Multi-Speaker, Mic Check Lobby, Consent Banner & đồng bộ JSON `summary.json` theo PostgreSQL + Credits)
+- **Phiên bản**: `2.2` (Bổ sung bộ REST API `/api/v1/admin/*` & 6 màn hình System Admin Portal `SCR-ADM-01..06`)
 - **Ngày cập nhật**: 2026-11-19
 - **Stack Kỹ thuật**:
   - **Frontend**: `Next.js 15 (App Router, TypeScript, TailwindCSS)`
@@ -118,6 +118,31 @@ Toàn bộ các endpoint của Host yêu cầu Header `Authorization: Bearer <Co
 | `GET` | `/api/v1/wallets/me/usage-history` | Host | **Lịch sử Sử dụng Credit** từ `credit_ledger` (`FR-508`, theo phiên phòng, AI Summary, Credit hết hạn + phân bổ 3 ngăn). |
 | `GET` | `/api/v1/wallets/me/sessions/{roomId}/breakdown` | Host | Chi tiết đối soát từng giây thực tế (`audioSeconds`, `listenerSeconds`, `mtChars`, `ttsChars`, `creditsDeducted`, biểu đồ + xuất CSV). |
 | `GET` | `/api/v1/rooms/{roomId}/analytics` | Host | Thống kê phân bố ngôn ngữ & đỉnh người nghe theo thời gian (`FR-408`, `BUSINESS+`). |
+
+### 2.5. Phân hệ Quản trị Hệ thống (`System Admin Portal — /api/v1/admin/*`, yêu cầu `role == ADMIN`)
+
+Tất cả các endpoint ghi/sửa/xóa dưới đây bắt buộc gửi trường `reason` và tự động lưu vết bất biến vào `admin_audit_logs`:
+
+| Method | Endpoint | Chức năng | Mô tả & Payload chính |
+| :---: | :--- | :---: | :--- |
+| `GET` | `/api/v1/admin/stats/overview` | `FR-604` | Tổng quan Doanh thu (Stripe/VietQR), Credit cấp/dùng/hết hạn, AWS/Azure COGS, Gross Margin % & số phòng/người nghe realtime. |
+| `GET` | `/api/v1/admin/hosts` | `FR-605` | Danh sách Host (tìm email/tên/ID, lọc theo `planCode`, `status`). |
+| `GET` | `/api/v1/admin/hosts/{hostId}` | `FR-605` | Hồ sơ 360° của 1 Host (Profile + VAT, Subscription, Ví 3 ngăn, Lịch sử Nạp/Sử dụng, Danh sách phòng). |
+| `POST` | `/api/v1/admin/hosts/{hostId}/status` | `FR-605` | Khóa / Mở khóa tài khoản (`{"status": "SUSPENDED" | "ACTIVE", "reason": "..."}`). Khi `SUSPENDED` -> `GlobalSignOut` + đóng an toàn phòng đang chạy. |
+| `POST` | `/api/v1/admin/hosts/{hostId}/subscription` | `FR-605` | Gán / Gia hạn gói thủ công cho khách Enterprise B2B (`planCode`, `durationDays`, `reason`). |
+| `POST` | `/api/v1/admin/wallets/{hostId}/adjust` | `FR-605` | Cộng / Trừ Credit thủ công theo ngăn (`bucket: PROMO|PLAN|TOPUP`, `creditsDelta`, `expiresDays`, `reason`). |
+| `GET`/`PUT` | `/api/v1/admin/anti-abuse/domains` | `FR-605` | Quản lý danh sách chặn `disposable_email_domains` & xem/gỡ IP bị rate-limit cho gói `FREE`. |
+| `GET`/`PUT` | `/api/v1/admin/plans/{code}` | `FR-606` | Chỉnh sửa giá cố định, `monthlyCredits`, `topupBonusPct`, `isActive` và JSON `entitlements` (tự invalidate Redis cache). |
+| `GET`/`PUT` | `/api/v1/admin/credit-packs/{code}` | `FR-606` | Chỉnh sửa giá cố định, `baseCredits`, `isActive` của `PACK_S`/`M`/`L`. |
+| `GET`/`PUT` | `/api/v1/admin/pricing` | `FR-606` | Quản lý bảng đơn giá Credit động (`STT`/`MT`/`TTS`/`Listeners`/`AI Summary`) và tỷ giá `USD -> VND` (có versioning). |
+| `GET` | `/api/v1/admin/transactions` | `FR-607` | Tra cứu `payment_transactions` toàn sàn (lọc theo cổng, trạng thái, `tx_id`/`txCode`). |
+| `POST` | `/api/v1/admin/transactions/{txId}/reconcile` | `FR-607` | **Khớp lệnh VietQR thủ công** (`bankRefCode`, `reason`) khi khách chuyển khoản sai nội dung (idempotent). |
+| `POST` | `/api/v1/admin/transactions/{txId}/refund` | `FR-607` | Hoàn tiền Stripe (gọi Stripe Refund API) hoặc đánh dấu hoàn tiền VietQR + trừ ngược Credit tương ứng (`reason`). |
+| `GET`/`POST`/`PATCH` | `/api/v1/admin/promos` | `FR-608` | Tạo, sửa, bật/tắt mã Promo & xem thống kê lượt đổi / Credit thực dùng vs hết hạn. |
+| `GET` | `/api/v1/admin/rooms/live` | `FR-609` | Danh sách phòng đang `ACTIVE` toàn sàn (Host, sĩ số, ngôn ngữ TTS, Burn Rate, thời lượng). |
+| `POST` | `/api/v1/admin/rooms/{roomId}/force-end` | `FR-609` | Đóng khẩn cấp phòng đang chạy (`reason`), flush giây lẻ cuối cùng & giải phóng tài nguyên. |
+| `GET`/`PUT` | `/api/v1/admin/ai-providers/killswitch` | `FR-609` | Xem tỷ lệ lỗi `5xx` của AWS AI & Azure Speech (`vi-VN`); bật/tắt **Kill-switch Fallback `Text-only`** theo provider/ngôn ngữ. |
+| `GET` | `/api/v1/admin/audit-logs` | `FR-609` | Tra cứu nhật ký kiểm toán bất biến `admin_audit_logs` (lọc theo `adminId`, `action`, `targetType`, thời gian). |
 
 ---
 
@@ -264,3 +289,9 @@ Hệ thống Web App (`apps/web`) bao gồm **6 màn hình chính** được thi
 | **SCR-04** | `/r/[roomCode]` | Listener (Mobile / Web) | `TODO` | **Màn hình Người nghe (Không cần đăng nhập)**:<br>- **Banner Minh bạch Quyền riêng tư (`FR-107`)**: Thông báo *"Phiên này đang được dịch thuật & lưu biên bản AI"* + Custom Branding (`BUSINESS+`) / White-label (`ENTERPRISE`).<br>- **Thanh Công cụ Nổi (Floating Action Bar)**: Dropdown đổi ngôn ngữ tức thì (`< 200ms`, gắn nhãn nếu ngôn ngữ đang ở chế độ `Text-only`), nút **Bật/Tắt Loa (Audio TTS)** kèm trạng thái hàng đợi, nút Đơn ngữ / Song ngữ, nút **Tải biên bản** (nếu Host cho phép).<br>- **Khung Phụ đề Cuộn Thông minh (Auto-scroll Transcript View)**: Tải đầy đủ câu đã nói từ đầu buổi khi vào muộn/F5; chữ `Partial` mượt và chốt `Final` kèm mốc thời gian. |
 | **SCR-05** | `/dashboard/rooms/[roomId]/history` | Host & Listener* | `TODO` | **Màn hình Chi tiết Lịch sử Dịch, Tải xuống, AI Summary & Analytics**:<br>- **Tab 1 — Nội dung Bản dịch (Full Transcript)**: Xem lại theo từng câu, tìm kiếm, đổi ngôn ngữ, nút tải theo `exportFormats` của gói, và nút **Xóa biên bản** (`FR-107`, chỉ Host).<br>- **Tab 2 — Tóm tắt Nội dung AI (AI Meeting Summary)**: Nút **"✨ Tóm tắt AI"** (`15 Cr` Pro / `25 Cr` Business+, xem lại `0 Cr`); hiển thị Overview, Key Takeaways `[mm:ss]` nhảy tới câu tương ứng, Action Items.<br>- **Tab 3 — Phân tích & Chi phí Phiên (Chỉ Host)**: Biểu đồ phân bố ngôn ngữ, đỉnh người nghe (`Session Analytics` + xuất CSV/PDF theo gói) và bóc tách Credit tiêu thụ theo từng giây. |
 | **SCR-06** | `/dashboard/billing` | Host | `TODO` | Gồm **4 Tab**: (1) **Gói dịch vụ** (so sánh 4 gói `FREE`/`PRO`/`BUSINESS`/`ENTERPRISE`, Nâng cấp/Hủy gia hạn), (2) **Mua thêm Credit** (`PACK_S`/`M`/`L` kèm `+Bonus%`, Promo Code, Auto Top-up), (3) **Lịch sử Nạp tiền** (`payment_transactions` + tải PDF VAT), (4) **Lịch sử Sử dụng Credit** (`credit_ledger` + Drawer bóc tách từng giây & xuất CSV). |
+| **SCR-ADM-01** | `/admin` | System Admin | `TODO` | **Admin Executive & Ops Dashboard (`ADM-01`)**: KPI Doanh thu (Stripe/VietQR), COGS, Gross Margin % (cảnh báo `< 55%`), Credit cấp/dùng/hết hạn, phòng `ACTIVE`, người nghe online & biểu đồ độ trễ `P95`. |
+| **SCR-ADM-02** | `/admin/hosts`, `/admin/hosts/[id]` | System Admin | `TODO` | **Quản lý Host & Anti-Abuse (`ADM-02`)**: Danh sách lọc/tìm Host, Hồ sơ 360°, nút Khóa/Mở khóa, Gán gói tay B2B, Cộng/Trừ Credit theo ngăn (bắt buộc Confirm + lý do) & quản lý blocklist email rác. |
+| **SCR-ADM-03** | `/admin/plans-pricing` | System Admin | `TODO` | **Quản trị Gói, Entitlements & Bảng giá Động (`ADM-03`)**: Chỉnh 4 gói cố định + JSON `entitlements`, chỉnh 3 Top-up Packs, bảng đơn giá Credit động & tỷ giá `USD -> VND` kèm lịch sử phiên bản giá. |
+| **SCR-ADM-04** | `/admin/payments` | System Admin | `TODO` | **Đối soát Giao dịch & Hoàn tiền (`ADM-04`)**: Tra cứu `payment_transactions` toàn sàn, Modal **Khớp tay VietQR** (nhập mã sao kê ngân hàng) và Modal **Hoàn tiền Stripe/VietQR**. |
+| **SCR-ADM-05** | `/admin/promos` | System Admin | `TODO` | **Quản lý Mã Khuyến mãi (`ADM-05`)**: Tạo/sửa/bật-tắt mã Promo & bảng thống kê lượt đổi, tổng Credit đã tặng vs tỷ lệ thực dùng. |
+| **SCR-ADM-06** | `/admin/operations` | System Admin | `TODO` | **Vận hành Live, AI Kill-switch & Audit Logs (`ADM-06`)**: Danh sách phòng `ACTIVE` + nút **Force End Room**, trạng thái `5xx` & công tắc Kill-switch `Text-only` cho AWS/Azure Speech (`vi-VN`), và bảng tra cứu `admin_audit_logs` bất biến. |

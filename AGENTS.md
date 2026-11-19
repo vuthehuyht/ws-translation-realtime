@@ -8,10 +8,10 @@ DO NOT read all specification files at once. Read ONLY the document relevant to 
 
 | When working on... | MUST read specification |
 | :--- | :--- |
-| Feature Epics & Sub-Epics Breakdown (`EPIC-01` .. `EPIC-09`, `EP01-S1` .. `EP09-S3`) & Current Status | [epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md) |
-| Implementation Roadmap, 10 Execution Phases & Granular Task Breakdown (`TASK-AUTH-01` .. `TASK-UI-11`) | [implementation-tasks-roadmap.md](file:///D:/code/ws-translation-realtime/docs/tasks/implementation-tasks-roadmap.md) |
+| Feature Epics & Sub-Epics Breakdown (`EPIC-01` .. `EPIC-09`, `EP01-S1` .. `EP09-S6`) & Current Status | [epics-and-sub-epics.md](file:///D:/code/ws-translation-realtime/docs/tasks/epics-and-sub-epics.md) |
+| Implementation Roadmap, 10 Execution Phases & Granular Task Breakdown (`TASK-AUTH-01` .. `TASK-UI-13`) | [implementation-tasks-roadmap.md](file:///D:/code/ws-translation-realtime/docs/tasks/implementation-tasks-roadmap.md) |
 | 4 Fixed Plans, 3-Bucket Credit Wallet (`1 USD = 100 Cr`), Per-Second Billing, Entitlements, Stripe/VietQR, Host/Listener permissions | [01-business-requirements-and-billing.md](file:///D:/code/ws-translation-realtime/docs/specs/01-business-requirements-and-billing.md) |
-| Detailed business logic & Acceptance Criteria for all 42 features (`FR-101` .. `FR-604`) | [02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md) |
+| Detailed business logic & Acceptance Criteria for all 47 features (`FR-101` .. `FR-609`, incl. Admin Portal) | [02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md) |
 | AWS Single-AZ architecture, Redis keys, 10 PostgreSQL tables, Failover/Handover, Terraform & GitHub Actions CI/CD | [03-system-architecture-and-techstack.md](file:///D:/code/ws-translation-realtime/docs/specs/03-system-architecture-and-techstack.md) |
 | Monorepo structure, REST API (`/api/v1/*`), WebSocket JSON payloads, S3 schemas (`master.json`, `summary.json`), 6 UI screens | [04-api-websocket-and-ui-specs.md](file:///D:/code/ws-translation-realtime/docs/specs/04-api-websocket-and-ui-specs.md) |
 
