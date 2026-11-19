@@ -1,16 +1,34 @@
 "use client";
 
 import React, { useState } from "react";
-import {
-  CreateRoomCard,
-  type CreateRoomFormPayload,
-} from "@/components/dashboard/create-room-card";
+import dynamic from "next/dynamic";
+import type { CreateRoomFormPayload } from "@/components/dashboard/create-room-card";
 import { useDashboardSession } from "@/components/dashboard/dashboard-session-context";
 import {
-  type RecentRoomItem,
-  RecentRoomsList,
-} from "@/components/dashboard/recent-rooms-list";
-import { WalletCard } from "@/components/dashboard/wallet-card";
+  CreateRoomCardSkeleton,
+  RecentRoomsListSkeleton,
+  WalletCardSkeleton,
+} from "@/components/dashboard/dashboard-skeleton";
+import type { RecentRoomItem } from "@/components/dashboard/recent-rooms-list";
+
+const WalletCard = dynamic(
+  () => import("@/components/dashboard/wallet-card").then((mod) => mod.WalletCard),
+  { loading: () => <WalletCardSkeleton /> }
+);
+
+const CreateRoomCard = dynamic(
+  () =>
+    import("@/components/dashboard/create-room-card").then((mod) => mod.CreateRoomCard),
+  { loading: () => <CreateRoomCardSkeleton /> }
+);
+
+const RecentRoomsList = dynamic(
+  () =>
+    import("@/components/dashboard/recent-rooms-list").then(
+      (mod) => mod.RecentRoomsList
+    ),
+  { loading: () => <RecentRoomsListSkeleton /> }
+);
 
 const INITIAL_PREVIEW_ROOMS: RecentRoomItem[] = [
   {

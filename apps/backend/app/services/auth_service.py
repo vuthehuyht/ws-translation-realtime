@@ -93,29 +93,18 @@ class AuthService:
         self.redis = redis_client
 
     async def register(self, request: RegisterRequest) -> RegisterResponse:
-        """Register user in Cognito without exposing account existence or userSub."""
+        """Register a new user in Cognito and reject duplicate accounts with 409 Conflict."""
         normalized_email = request.email.strip().lower()
 
-        # Return the same non-committal response when the email already exists so callers
-        # cannot enumerate registered accounts or obtain an existing userSub.
         existing_user = await self.user_repo.get_by_email(normalized_email)
         if existing_user and existing_user.status == "ACTIVE":
-            return RegisterResponse(
-                status="CONFIRMATION_REQUIRED",
-                email=normalized_email,
-            )
+            raise ConflictException("An account with this email already exists")
 
-        try:
-            await self.cognito.sign_up(
-                email=normalized_email,
-                password=request.password,
-                full_name=request.full_name,
-            )
-        except ConflictException:
-            return RegisterResponse(
-                status="CONFIRMATION_REQUIRED",
-                email=normalized_email,
-            )
+        await self.cognito.sign_up(
+            email=normalized_email,
+            password=request.password,
+            full_name=request.full_name,
+        )
 
         # Note: Per TASK-AUTH-01 / FR-101.1, PostgreSQL persistence of users and wallets
         # is deferred until OTP is successfully confirmed in TASK-AUTH-02.

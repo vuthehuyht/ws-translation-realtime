@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
     BadGatewayException,
+    ConflictException,
     ForbiddenException,
     ServiceUnavailableException,
     TooManyRequestsException,
@@ -63,10 +64,9 @@ async def test_auth_service_registration_and_confirmation_lifecycle(
     user_before_confirm = await user_repo.get_by_email("host.new@example.com")
     assert user_before_confirm is None
 
-    # 2. Duplicate registration returns the same non-committal status without leaking existence
-    dup_res = await service.register(reg_req)
-    assert dup_res.status == "CONFIRMATION_REQUIRED"
-    assert dup_res.user_sub is None
+    # 2. Duplicate registration raises ConflictException (HTTP 409)
+    with pytest.raises(ConflictException):
+        await service.register(reg_req)
 
     # 3. Confirm sign up with OTP (TASK-AUTH-02)
     confirm_req = ConfirmRequest(
