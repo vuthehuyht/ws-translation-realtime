@@ -2,6 +2,7 @@
 
 from app.schemas.requests.auth import (
     ConfirmRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     LogoutRequest,
     RegisterRequest,
@@ -10,6 +11,7 @@ from app.schemas.requests.auth import (
 
 __all__ = [
     "ConfirmRequest",
+    "ForgotPasswordRequest",
     "LoginRequest",
     "LogoutRequest",
     "RegisterRequest",

@@ -1,5 +1,6 @@
 """Unit tests for AuthService (app.services.auth_service)."""
 
+import time
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
@@ -16,10 +17,21 @@ from app.core.exceptions import (
     UnauthorizedException,
 )
 from app.integrations.cognito import MockCognitoClient
+from app.models.user import User, UserProfile
 from app.repositories.user_repository import UserRepository
 from app.repositories.wallet_repository import WalletRepository
-from app.schemas.requests import ConfirmRequest, LoginRequest, RegisterRequest, ResendOtpRequest
-from app.services.auth_service import AuthService
+from app.schemas.requests import (
+    ConfirmRequest,
+    ForgotPasswordRequest,
+    LoginRequest,
+    RegisterRequest,
+    ResendOtpRequest,
+)
+from app.services.auth_service import (
+    FORGOT_PASSWORD_MAX_ATTEMPTS,
+    FORGOT_PASSWORD_WINDOW_SECONDS,
+    AuthService,
+)
 
 
 async def test_auth_service_registration_and_confirmation_lifecycle(
@@ -363,3 +375,203 @@ async def test_auth_service_refresh_rejects_token_without_subject(
 
     with pytest.raises(UnauthorizedException, match="missing subject"):
         await service.refresh_session("mock_refresh_anything")
+
+
+async def test_logout_requires_session_store(db_session: AsyncSession) -> None:
+    service = AuthService(
+        user_repo=UserRepository(session=db_session),
+        wallet_repo=WalletRepository(session=db_session),
+        cognito_client=MockCognitoClient(),
+        redis_client=None,
+    )
+
+    # Returning success without a blocklist would claim a revocation that is not enforced.
+    with pytest.raises(ServiceUnavailableException):
+        await service.logout(
+            access_token="t",
+            subject="u1",
+            expires_at=None,
+            refresh_token="r",
+            global_sign_out=False,
+        )
+
+
+async def _make_forgot_service(
+    db_session: AsyncSession,
+    *,
+    redis_client: fakeredis.aioredis.FakeRedis | None = None,
+    cognito_client: MockCognitoClient | None = None,
+) -> tuple[AuthService, MockCognitoClient]:
+    cognito = cognito_client or MockCognitoClient()
+    service = AuthService(
+        user_repo=UserRepository(db_session),
+        wallet_repo=WalletRepository(db_session),
+        cognito_client=cognito,
+        redis_client=redis_client,
+    )
+    return service, cognito
+
+
+async def _seed_user(
+    db_session: AsyncSession,
+    cognito: MockCognitoClient,
+    *,
+    email: str,
+    status: str = "ACTIVE",
+    confirmed: bool = True,
+) -> User:
+    sign_up_res = await cognito.sign_up(email=email, password="Password123@", full_name="Host User")
+    if confirmed:
+        await cognito.confirm_sign_up(email=email, confirmation_code="123456")
+    user = User(id=sign_up_res["userSub"], email=email, role="HOST", status=status)
+    profile = UserProfile(user_id=user.id, full_name="Host User")
+    await UserRepository(db_session).create_user_with_profile(user=user, profile=profile)
+    return user
+
+
+async def test_forgot_password_active_user_succeeds_and_records_redis_slot(
+    db_session: AsyncSession,
+) -> None:
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    service, cognito = await _make_forgot_service(db_session, redis_client=redis)
+    await _seed_user(db_session, cognito, email="active@example.com", status="ACTIVE")
+
+    res = await service.forgot_password(ForgotPasswordRequest(email="  Active@Example.COM  "))
+
+    assert res.status == "OTP_SENT"
+    assert res.email == "active@example.com"
+    assert cognito.users["active@example.com"].reset_code == "123456"
+    rate_key = "email:active@example.com:forgot_password_attempts"
+    assert await redis.zcard(rate_key) == 1
+    assert 0 < await redis.ttl(rate_key) <= FORGOT_PASSWORD_WINDOW_SECONDS
+    await redis.aclose()
+
+
+async def test_forgot_password_anti_enumeration_unknown_and_unconfirmed_emails(
+    db_session: AsyncSession,
+) -> None:
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    service, cognito = await _make_forgot_service(db_session, redis_client=redis)
+    await cognito.sign_up(email="unconfirmed@example.com", password="Password123@", full_name="U")
+
+    unknown_res = await service.forgot_password(ForgotPasswordRequest(email="ghost@example.com"))
+    unconfirmed_res = await service.forgot_password(
+        ForgotPasswordRequest(email="unconfirmed@example.com")
+    )
+
+    assert unknown_res.status == "OTP_SENT"
+    assert unknown_res.email == "ghost@example.com"
+    assert unconfirmed_res.status == "OTP_SENT"
+    assert unconfirmed_res.email == "unconfirmed@example.com"
+    assert await redis.zcard("email:ghost@example.com:forgot_password_attempts") == 1
+    assert await redis.zcard("email:unconfirmed@example.com:forgot_password_attempts") == 1
+    await redis.aclose()
+
+
+async def test_forgot_password_suspended_user_skips_cognito_and_returns_uniform_response(
+    db_session: AsyncSession,
+) -> None:
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    service, cognito = await _make_forgot_service(db_session, redis_client=redis)
+    await _seed_user(db_session, cognito, email="suspended@example.com", status="SUSPENDED")
+    cognito.forgot_password = AsyncMock(side_effect=AssertionError("Cognito must not be called"))
+
+    res = await service.forgot_password(ForgotPasswordRequest(email="suspended@example.com"))
+
+    assert res.status == "OTP_SENT"
+    assert res.email == "suspended@example.com"
+    assert await redis.zcard("email:suspended@example.com:forgot_password_attempts") == 1
+    await redis.aclose()
+
+
+async def test_forgot_password_sliding_window_rate_limit_blocks_4th_attempt_and_recovers(
+    db_session: AsyncSession,
+) -> None:
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    service, cognito = await _make_forgot_service(db_session, redis_client=redis)
+    await _seed_user(db_session, cognito, email="limit@example.com", status="ACTIVE")
+    await _seed_user(db_session, cognito, email="other@example.com", status="ACTIVE")
+
+    # First 3 requests within 15 minutes succeed (mixed casing shares same key)
+    for variant in ("limit@example.com", "LIMIT@example.com", "  Limit@Example.Com "):
+        res = await service.forgot_password(ForgotPasswordRequest(email=variant))
+        assert res.status == "OTP_SENT"
+
+    # 4th request is rejected with 429 and accurate retryAfter without polluting ZSET
+    rate_key = "email:limit@example.com:forgot_password_attempts"
+    with pytest.raises(TooManyRequestsException) as exc_info:
+        await service.forgot_password(ForgotPasswordRequest(email="limit@example.com"))
+
+    retry_after = exc_info.value.details["retryAfter"]
+    assert isinstance(retry_after, int)
+    assert 1 <= retry_after <= FORGOT_PASSWORD_WINDOW_SECONDS
+    assert await redis.zcard(rate_key) == FORGOT_PASSWORD_MAX_ATTEMPTS
+
+    # Other emails remain unaffected
+    other_res = await service.forgot_password(ForgotPasswordRequest(email="other@example.com"))
+    assert other_res.status == "OTP_SENT"
+
+    # Simulate oldest timestamp expiring past the 900s sliding window
+    oldest = await redis.zrange(rate_key, 0, 0)
+    await redis.zadd(rate_key, {oldest[0]: time.time() - FORGOT_PASSWORD_WINDOW_SECONDS - 5})
+
+    recovered = await service.forgot_password(ForgotPasswordRequest(email="limit@example.com"))
+    assert recovered.status == "OTP_SENT"
+    assert await redis.zcard(rate_key) == FORGOT_PASSWORD_MAX_ATTEMPTS
+    await redis.aclose()
+
+
+async def test_forgot_password_fails_closed_when_redis_missing_or_down(
+    db_session: AsyncSession,
+) -> None:
+    service_no_redis, cognito = await _make_forgot_service(db_session, redis_client=None)
+    cognito.forgot_password = AsyncMock(side_effect=AssertionError("Cognito must not be called"))
+
+    with pytest.raises(ServiceUnavailableException):
+        await service_no_redis.forgot_password(ForgotPasswordRequest(email="host@example.com"))
+
+    broken_redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    broken_redis.pipeline = lambda *args, **kwargs: (_ for _ in ()).throw(
+        RedisConnectionError("Redis offline")
+    )
+    service_broken, _ = await _make_forgot_service(db_session, redis_client=broken_redis)
+
+    with pytest.raises(ServiceUnavailableException):
+        await service_broken.forgot_password(ForgotPasswordRequest(email="host@example.com"))
+    await broken_redis.aclose()
+
+
+async def test_forgot_password_preserves_slot_on_cognito_throttle_and_rolls_back_on_5xx(
+    db_session: AsyncSession,
+) -> None:
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    service, cognito = await _make_forgot_service(db_session, redis_client=redis)
+    await _seed_user(db_session, cognito, email="err@example.com", status="ACTIVE")
+    rate_key = "email:err@example.com:forgot_password_attempts"
+
+    # DB lookup failure also rolls back the Redis slot so the user does not lose an attempt
+    original_get_by_email = service.user_repo.get_by_email
+    service.user_repo.get_by_email = AsyncMock(side_effect=RuntimeError("DB timeout"))
+    with pytest.raises(RuntimeError, match="DB timeout"):
+        await service.forgot_password(ForgotPasswordRequest(email="err@example.com"))
+    assert await redis.zcard(rate_key) == 0
+    service.user_repo.get_by_email = original_get_by_email
+
+    # Cognito 5xx rolls back the Redis slot so the user does not lose an attempt
+    cognito.forgot_password = AsyncMock(side_effect=BadGatewayException("Provider down"))
+    with pytest.raises(BadGatewayException):
+        await service.forgot_password(ForgotPasswordRequest(email="err@example.com"))
+    assert await redis.zcard(rate_key) == 0
+
+    # Cognito 429 preserves the Redis slot
+    cognito.forgot_password = AsyncMock(side_effect=TooManyRequestsException("Throttled"))
+    with pytest.raises(TooManyRequestsException):
+        await service.forgot_password(ForgotPasswordRequest(email="err@example.com"))
+    assert await redis.zcard(rate_key) == 1
+
+    # Rollback Redis failure must never mask the original BadGatewayException
+    cognito.forgot_password = AsyncMock(side_effect=BadGatewayException("Provider down"))
+    redis.zrem = AsyncMock(side_effect=RedisConnectionError("Cleanup failed"))
+    with pytest.raises(BadGatewayException, match="Provider down"):
+        await service.forgot_password(ForgotPasswordRequest(email="err@example.com"))
+    await redis.aclose()

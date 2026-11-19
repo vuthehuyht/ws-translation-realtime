@@ -62,6 +62,25 @@ export function resendOtp(
   });
 }
 
+export interface ForgotPasswordPayload {
+  email: string;
+}
+
+export interface ForgotPasswordResponse {
+  status: string;
+  email: string;
+  message: string;
+}
+
+export function forgotPassword(
+  payload: ForgotPasswordPayload
+): Promise<ForgotPasswordResponse> {
+  return apiRequest<ForgotPasswordResponse>("/api/v1/auth/forgot-password", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export interface LoginHostPayload {
   email: string;
   password: string;

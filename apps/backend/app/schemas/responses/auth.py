@@ -80,3 +80,14 @@ class ResendOtpResponse(BaseModel):
     retry_after: int = Field(default=60, alias="retryAfter")
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class ForgotPasswordResponse(BaseModel):
+    """Uniform response returned upon password reset OTP request."""
+
+    status: str = "OTP_SENT"
+    email: str
+    message: str = (
+        "If an active account exists for this email, a password reset code has been sent."
+    )
+
