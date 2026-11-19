@@ -2,12 +2,11 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   AudioWaveform,
   ChevronDown,
   CreditCard,
-  LayoutDashboard,
   LogOut,
   Settings,
   ShieldAlert,
@@ -22,27 +21,10 @@ interface DashboardHeaderProps {
   userEmail?: string;
 }
 
-const NAV_ITEMS = [
-  {
-    href: "/dashboard",
-    label: "Tổng quan",
-    icon: LayoutDashboard,
-    disabled: false,
-  },
-  {
-    href: "/dashboard/billing",
-    label: "Thanh toán",
-    icon: CreditCard,
-    // Keep billing disabled until the /dashboard/billing route is implemented to avoid 404 navigation.
-    disabled: true,
-  },
-];
-
 export function DashboardHeader({
   userName,
   userEmail,
 }: DashboardHeaderProps) {
-  const pathname = usePathname();
   const router = useRouter();
 
   const displayName = userName?.trim() || userEmail || "Host";
@@ -114,67 +96,19 @@ export function DashboardHeader({
   return (
     <header className="sticky top-0 z-30 border-b border-border bg-card/95 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center gap-6">
-          <Link href="/dashboard" className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-sm shadow-indigo-600/25">
-              <AudioWaveform className="h-5 w-5" />
-            </div>
-            <div className="hidden sm:block">
-              <p className="text-sm font-bold tracking-tight text-foreground">
-                VoiceBridge AI
-              </p>
-              <p className="text-[11px] font-medium text-muted-foreground">
-                Host Studio
-              </p>
-            </div>
-          </Link>
-
-          <nav
-            aria-label="Dashboard navigation"
-            className="flex items-center gap-1"
-          >
-            {NAV_ITEMS.map((item) => {
-              const Icon = item.icon;
-              if (item.disabled) {
-                return (
-                  <span
-                    key={item.href}
-                    aria-disabled="true"
-                    title="Trang Thanh toán đang được phát triển"
-                    className="inline-flex cursor-not-allowed items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-muted-foreground/60"
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      Sắp ra mắt
-                    </span>
-                  </span>
-                );
-              }
-
-              const isActive =
-                item.href === "/dashboard"
-                  ? pathname === "/dashboard"
-                  : pathname.startsWith(item.href);
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-        </div>
+        <Link href="/dashboard" className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-sm shadow-indigo-600/25">
+            <AudioWaveform className="h-5 w-5" />
+          </div>
+          <div className="hidden sm:block">
+            <p className="text-sm font-bold tracking-tight text-foreground">
+              VoiceBridge AI
+            </p>
+            <p className="text-[11px] font-medium text-muted-foreground">
+              Host Studio
+            </p>
+          </div>
+        </Link>
 
         <div ref={menuContainerRef} className="relative flex items-center gap-3">
           <button
