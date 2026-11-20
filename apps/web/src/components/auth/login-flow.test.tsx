@@ -37,6 +37,16 @@ describe("LoginPage integration flow", () => {
     expect(screen.getByLabelText("Địa chỉ Email")).toHaveValue("verified@example.com");
   });
 
+  it("shows deleted account confirmation banner when deleted=1 query param is present", () => {
+    mockSearchParams = new URLSearchParams("deleted=1");
+
+    render(<LoginPage />);
+
+    expect(
+      screen.getByText(/tài khoản của bạn đã được xóa và ẩn danh dữ liệu cá nhân/i)
+    ).toBeInTheDocument();
+  });
+
   it("logs in via backend API, saves session to localStorage when rememberMe is checked, and redirects to /dashboard", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(

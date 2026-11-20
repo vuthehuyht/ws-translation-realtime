@@ -282,3 +282,14 @@ class ChangePasswordRequest(BaseModel):
         if self.old_password == self.new_password:
             raise ValueError("New password must be different from current password")
         return self
+
+
+class DeleteAccountRequest(BaseModel):
+    """Payload requiring explicit confirmation before irreversible GDPR account deletion."""
+
+    confirmation: Literal["DELETE"] = Field(
+        ...,
+        description="Must equal 'DELETE' to confirm irreversible account deletion",
+    )
+
+    model_config = ConfigDict(populate_by_name=True)

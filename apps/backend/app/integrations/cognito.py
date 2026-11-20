@@ -107,6 +107,10 @@ class CognitoClient:
         """Change the password for an authenticated user via Cognito ChangePassword."""
         raise NotImplementedError
 
+    async def delete_user(self, access_token: str) -> None:
+        """Permanently delete the authenticated user from Cognito via DeleteUser."""
+        raise NotImplementedError
+
     async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
         """Verify an access token and return its claims; raise ValueError when invalid."""
         raise NotImplementedError
@@ -287,6 +291,25 @@ class MockCognitoClient(CognitoClient):
         if user.password != previous_password:
             raise BadRequestException("Current password is incorrect")
         user.password = proposed_password
+
+    async def delete_user(self, access_token: str) -> None:
+        try:
+            subject = decode_access_token(access_token).get("sub")
+        except ValueError as e:
+            raise UnauthorizedException("Access token is invalid or expired") from e
+
+        target_email = next(
+            (email for email, u in self.users.items() if u.sub == subject),
+            None,
+        )
+        if not target_email:
+            raise UnauthorizedException("Access token is invalid or expired")
+
+        del self.users[target_email]
+        for token, session in list(self.refresh_sessions.items()):
+            if session.sub == subject:
+                del self.refresh_sessions[token]
+        logger.info("Mock Cognito delete_user completed (sub=%s)", subject)
 
     async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
         # Offline mock tokens are HS256 JWTs signed with the local secret.
@@ -656,6 +679,23 @@ class AwsCognitoClient(CognitoClient):
                         "Too many password change attempts. Please try again later."
                     ) from e
                 logger.error("Cognito change_password ClientError: %s - %s", error_code, error_msg)
+                raise BadGatewayException("Authentication provider error") from e
+
+    async def delete_user(self, access_token: str) -> None:
+        """Call Cognito DeleteUser to permanently delete the authenticated user."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                await client.delete_user(AccessToken=access_token)
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code in ("NotAuthorizedException", "UserNotFoundException"):
+                    raise UnauthorizedException("Access token is invalid or expired") from e
+                if error_code in ("LimitExceededException", "TooManyRequestsException"):
+                    raise TooManyRequestsException(
+                        "Too many account deletion requests. Please try again later."
+                    ) from e
+                logger.error("Cognito delete_user ClientError: %s - %s", error_code, error_msg)
                 raise BadGatewayException("Authentication provider error") from e
 
     async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:

@@ -22,7 +22,7 @@ DO NOT read all specification files at once. Read ONLY the document relevant to 
 - **Frontend (`apps/web`)**: Next.js 15 (App Router, TypeScript, `output: "standalone"`), TailwindCSS, Shadcn UI, WebAudio (`AudioWorklet` + Silero VAD), AWS AppSync Events WebSocket Client.
 - **Backend (`apps/backend`)**: Python 3.12+, **FastAPI**, **Uvicorn (`uvloop` + `httptools`)**, **Pydantic v2**, package management via **`uv`**. Consolidates REST API (`/api/v1/*`), WebSocket Audio Ingest (`/ws/v1/*`), and Async Background Workers in a single unified service.
 - **Database & State**:
-  - **PostgreSQL 16 (Primary ACID Database)**: 10 relational tables (`users`, `user_profiles`, `wallets`, `payment_transactions`, `custom_vocabularies`, `promo_codes`, `promo_redemptions`, `rooms`, `room_transcripts` [metadata & S3 keys], `usage_ledger`). Handled via **SQLAlchemy 2.0 Async (`asyncpg`)** and **Alembic** migrations.
+  - **PostgreSQL 16 (Primary ACID Database)**: 11 relational tables (`users`, `user_profiles`, `deleted_account_records`, `wallets`, `payment_transactions`, `custom_vocabularies`, `promo_codes`, `promo_redemptions`, `rooms`, `room_transcripts` [metadata & S3 keys], `usage_ledger`). Handled via **SQLAlchemy 2.0 Async (`asyncpg`)** and **Alembic** migrations.
   - **ElastiCache for Redis (Single-AZ)**: 10s Audio Ring Buffer (`STREAM`), active TTS listener counter (`tts_count`), ephemeral live session transcript buffer.
   - **Amazon S3**: Permanent transcript package storage (`master.json`, `.txt`, `.srt`, `.vtt`, `.csv`), AI summaries (`summary.json`), and 24h TTS audio chunks (`.mp3`).
 - **AWS AI & Fan-out Pipeline**: Amazon Transcribe Streaming (STT) -> Amazon Translate (MT) -> Multi-Provider Neural TTS (Amazon Polly primary + Azure AI Speech Neural `southeastasia` via `httpx.AsyncClient` for `vi-VN`, `th-TH`, `id-ID`) -> S3/CloudFront + AWS AppSync Events (Fan-out up to 1,000 listeners/room). On-demand meeting summaries use **Amazon Bedrock** (`Claude 3.5 Haiku` / `Nova Lite`).
@@ -46,7 +46,7 @@ ws-translation-realtime/
 │       │   ├── main.py               # Entrypoint (/api/v1, /ws/v1, Lifespan background tasks)
 │       │   ├── api/                  # Routes (auth, rooms, wallets, transcripts, health) & deps.py
 │       │   ├── core/                 # config.py, db.py (async engine), security.py, exceptions.py
-│       │   ├── models/               # SQLAlchemy 2.0 ORM Models (9 PostgreSQL tables)
+│       │   ├── models/               # SQLAlchemy 2.0 ORM Models (11 PostgreSQL tables)
 │       │   ├── schemas/              # Pydantic v2 Models & Binary Audio protocol
 │       │   ├── services/             # Business Logic (auth, rooms, billing, transcripts)
 │       │   ├── integrations/         # AWS Clients (Cognito, S3, Transcribe, Translate, Polly, Bedrock, AppSync)
@@ -96,6 +96,9 @@ ws-translation-realtime/
     - `tests/api/test_<router>.py`: 1 file per router module (e.g., `test_auth.py`, `test_health.py`). Never create per-endpoint files like `test_auth_<action>.py`.
     - `tests/unit/<layer>/test_<module>.py`: 1 file per module under `core/`, `integrations/`, `models/`, `repositories/`, `schemas/`, `services/`. Never mix unit tests for `integrations/` or `services/` into `tests/api/`.
   - **Frontend (`apps/web/src/`)**: Co-locate tests next to the source file (`<name>.test.tsx` beside `<name>.tsx`, `<name>.test.ts` beside `<name>.ts`); keep multi-screen flow tests in `<domain>-flow.test.tsx`.
+- **Mandatory Per-File Test Coverage (Strict)**:
+  - Whenever ANY source file is created or modified (backend: `api/`, `core/`, `integrations/`, `models/`, `repositories/`, `schemas/`, `services/`, `ws/`, `workers/`; frontend: `app/`, `components/`, `lib/`, `worklets/`), you MUST add or update corresponding tests in its mirrored/co-located test file covering the added or changed behavior.
+  - Never rely solely on high-level API/flow tests to skip unit tests for lower layers (`repositories/`, `services/`, `integrations/`, `models/`, `schemas/`, `core/`, `lib/`).
 
 ---
 
@@ -132,6 +135,7 @@ docker build -t ws-translation/web:test ./apps/web
   - **Code Identifiers**: Write all variables, functions, classes, filenames, API paths, and JSON/DB keys in **English** (`snake_case` for Python, `camelCase` / `PascalCase` for TypeScript and JSON).
 - **Git & Commit Conventions**:
   - **Commit Messages**: ALWAYS write in **English** and strictly follow **Conventional Commits** (`<type>(<scope>): <subject>`, e.g., `feat(backend): add per-second credit billing worker`, `fix(web): handle websocket handover event`, `docs(specs): update credit plans schema`). Allowed types: `feat`, `fix`, `perf`, `refactor`, `docs`, `test`, `build`, `ci`, `chore`.
+  - **Pull Request Template (Strict)**: When creating or updating a Pull Request, ALWAYS follow [.github/pull_request_template.md](file:///D:/code/ws-translation-realtime/.github/pull_request_template.md) verbatim (Conventional Commits PR title, non-empty `## Summary`, at least one checked option under `## Type of Change`, `## Changes Made`, `## Verification & Testing`, and `## Checklist`). Always write the PR description to a UTF-8 file and pass it via `gh pr create/edit --body-file <file>` to prevent shell-escape or control-character mangling.
   - **NO AI Attribution / Co-Author**: STRICTLY FORBIDDEN to add `Co-Authored-By:` trailers, AI signatures, or any "Generated with..." taglines to commit messages or pull requests.
   - **NEVER Commit Brainstorming or Implementation Plans**: Files under `docs/superpowers/`, `docs/plans/`, or any brainstorming/implementation plan artifacts MUST NEVER be staged or committed to Git.
   - **Explicit Trigger**: Never run `git commit` or `git push` unless explicitly instructed by the user. Never use `git add .` (stage specific files only).

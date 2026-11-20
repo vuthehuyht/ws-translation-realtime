@@ -1,9 +1,9 @@
 # Phân rã Epic & Sub-Epic Theo Tính năng Chính (Feature Epics & Sub-Epics Breakdown)
 
 - **Mã tài liệu**: `DOC-06-EPICS`
-- **Phiên bản**: `1.3` (Mở rộng đầy đủ 6 phân hệ System Admin Portal `ADM-01..06` -> 9 Epics / 39 Sub-Epics)
-- **Ngày cập nhật**: `2026-11-19`
-- **Đồng bộ theo commit mới nhất**: `fefd1f4` (`feat(auth): implement reset password with OTP and optimize user queries`)
+- **Phiên bản**: `1.4` (Đồng bộ tiến độ User Profile/Settings/Avatar/Change Password, Public Marketing/Pricing Pages & Dashboard UX — 9 Epics / 41 Sub-Epics)
+- **Ngày cập nhật**: `2026-11-20`
+- **Đồng bộ theo commit mới nhất**: `c8aec70` (`feat(profile): implement user profile, avatar upload, settings, and change password (#25)`)
 - **Tài liệu liên quan**:
   - [01-business-requirements-and-billing.md](file:///D:/code/ws-translation-realtime/docs/specs/01-business-requirements-and-billing.md)
   - [02-functional-specifications.md](file:///D:/code/ws-translation-realtime/docs/specs/02-functional-specifications.md)
@@ -13,7 +13,7 @@
 
 ---
 
-## 1. Tổng quan Ma trận Epic (9 Epics — 39 Sub-Epics)
+## 1. Tổng quan Ma trận Epic (9 Epics — 41 Sub-Epics)
 
 Quy ước trạng thái & mức độ ưu tiên:
 - **Trạng thái**: `DONE` (hoàn tất code + test + merge) | `IN_PROGRESS` (hoàn thiện một phần) | `TODO` (chưa triển khai).
@@ -25,10 +25,10 @@ Quy ước trạng thái & mức độ ưu tiên:
 | Mã Epic | Tên Epic (Feature chính) | Số Sub-Epic | Tham chiếu Specs | Trạng thái |
 | :--- | :--- | :---: | :--- | :---: |
 | **EPIC-01** | Nền tảng Hạ tầng, Cơ sở dữ liệu & CI/CD | 4 | `DOC-03-SAD`, `DOC-04-API-UI` | `IN_PROGRESS` (3/4 Done) |
-| **EPIC-02** | Xác thực, Tài khoản, Hồ sơ & Quyền riêng tư Host | 5 | `MOD-01` (`FR-101`..`FR-105`, `FR-107`), `SCR-01` | `IN_PROGRESS` (3/5 Done) |
-| **EPIC-03** | Gói Dịch vụ, Ví Credit 3 Ngăn, Thanh toán & Lịch sử | 6 | `MOD-05` (`FR-501`..`FR-503`, `FR-508`..`FR-509`), `SCR-02`, `SCR-06` | `IN_PROGRESS` |
-| **EPIC-04** | Từ điển Chuyên ngành, Vòng đời Phòng & Tính năng Theo Gói | 5 | `MOD-02` (`FR-201`..`FR-208`), `FR-106`, `SCR-02` | `IN_PROGRESS` |
-| **EPIC-05** | Thu âm Client & Tầng Ingest WebSocket Nhị phân | 3 | `MOD-03` (`FR-301`..`FR-302`), `SCR-03` | `IN_PROGRESS` |
+| **EPIC-02** | Xác thực, Tài khoản, Hồ sơ & Quyền riêng tư Host | 5 | `MOD-01` (`FR-101`..`FR-105`, `FR-107`), `SCR-01` | `IN_PROGRESS` (4/5 Done) |
+| **EPIC-03** | Gói Dịch vụ, Ví Credit 3 Ngăn, Thanh toán & Lịch sử | 6 | `MOD-05` (`FR-501`..`FR-503`, `FR-508`..`FR-509`), `SCR-02`, `SCR-06` | `IN_PROGRESS` (2/6 In Progress) |
+| **EPIC-04** | Từ điển Chuyên ngành, Vòng đời Phòng & Tính năng Theo Gói | 5 | `MOD-02` (`FR-201`..`FR-208`), `FR-106`, `SCR-02` | `IN_PROGRESS` (1/5 In Progress) |
+| **EPIC-05** | Thu âm Client & Tầng Ingest WebSocket Nhị phân | 3 | `MOD-03` (`FR-301`..`FR-302`), `SCR-03` | `IN_PROGRESS` (1/3 In Progress) |
 | **EPIC-06** | Pipeline AI Dịch thuật Realtime & Trải nghiệm Người nghe | 5 | `MOD-03` (`FR-303`..`FR-306`), `MOD-04` (`FR-401`..`FR-405`), `SCR-03`, `SCR-04` | `TODO` |
 | **EPIC-07** | Động cơ Tính cước Theo Từng Giây & Kiểm soát Cạn Credit | 3 | `MOD-05` (`FR-504`..`FR-507`) | `TODO` |
 | **EPIC-08** | Biên bản Dịch thuật, AI Tóm tắt & Session Analytics | 4 | `MOD-04` (`FR-402`, `FR-406`..`FR-408`), `SCR-05` | `TODO` |
@@ -77,10 +77,10 @@ flowchart TD
 
 | Mã Sub-Epic | Tên Sub-Epic | Ưu tiên | Scope & Deliverables chính | Tasks liên quan | Trạng thái |
 | :--- | :--- | :---: | :--- | :--- | :---: |
-| **EP01-S1** | Backend Core & Clean Architecture | `P0` | FastAPI factory (`app/main.py`), Pydantic Settings (`core/config.py`), RFC 7807 exception handlers (`core/exceptions.py`), Security/JWT helpers (`core/security.py`), `GET /api/v1/health`. | Nền tảng BE | `DONE` |
-| **EP01-S2** | PostgreSQL 16 Schema & Repositories | `P0` | 10 ORM models, Alembic migration `0001_initial_schema`, Async Repository layer (`UserRepository`, `WalletRepository`, `RoomRepository`). | `TASK-DB-01..03` | `DONE` |
-| **EP01-S3** | Frontend Next.js 15 Foundation | `P0` | Next.js 15 App Router (`output: "standalone"`), TailwindCSS, API Client (`lib/api-client.ts`, `lib/api-base.ts`), Vitest + Testing Library setup. | Nền tảng FE | `DONE` |
-| **EP01-S4** | Terraform IaC & GitHub Actions CI/CD | `P0` | Terraform modules (`vpc`, `alb`, `ecs`, `ecr`, `rds`, `elasticache`, `cognito`, `appsync`, `s3_cloudfront`, `iam`, `security`, `waf`, `dev_box_ec2`) cho `local`/`dev`/`prod`; CI workflows (`backend-ci`, `frontend-ci`, `infra-ci`, `pr-check`). **Còn lại**: CD push ECR & ECS Deploy (OIDC). | Hạ tầng & CI/CD | `IN_PROGRESS` |
+| **EP01-S1** | Backend Core & Clean Architecture | `P0` | FastAPI factory (`app/main.py`), Pydantic Settings (`core/config.py`), RFC 7807 exception handlers (`core/exceptions.py`), Security/JWT helpers (`core/security.py`), `integrations/s3.py` (`AwsS3Client` + `MockS3Client`), `GET /api/v1/health`. | Nền tảng BE | `DONE` |
+| **EP01-S2** | PostgreSQL 16 Schema & Repositories | `P0` | 11 ORM models, Alembic migrations `0001_initial_schema`, `0002_add_profile_phone_bio` & `0003_add_deleted_account_records`, Async Repository layer (`UserRepository`, `WalletRepository`, `RoomRepository`). | `TASK-DB-01..03` | `DONE` |
+| **EP01-S3** | Frontend Next.js 15 Foundation & Public Pages | `P0` | Next.js 15 App Router (`output: "standalone"`), TailwindCSS, API Client (`lib/api-client.ts`, `lib/api-base.ts`), Vitest + Testing Library setup, cụm trang công khai Landing/Pricing/Products/Legal (`/`, `/pricing`, `/products/*`, `/privacy`, `/terms`) & `SiteFooter`. | Nền tảng FE | `DONE` |
+| **EP01-S4** | Terraform IaC & GitHub Actions CI/CD | `P0` | Terraform modules (`vpc`, `alb`, `ecs`, `ecr`, `rds`, `elasticache`, `cognito`, `appsync`, `s3_cloudfront` [đã bật CORS PUT], `iam`, `security`, `waf`, `dev_box_ec2`) cho `local`/`dev`/`prod`; CI workflows (`backend-ci`, `frontend-ci`, `infra-ci`, `pr-check`). **Còn lại**: CD push ECR & ECS Deploy (OIDC). | Hạ tầng & CI/CD | `IN_PROGRESS` |
 
 ---
 
@@ -91,11 +91,11 @@ flowchart TD
 
 | Mã Sub-Epic | Tên Sub-Epic | Ưu tiên | Scope & Deliverables chính | Tasks liên quan | Trạng thái |
 | :--- | :--- | :---: | :--- | :--- | :---: |
-| **EP02-S1** | Đăng ký Host, Xác thực OTP & Welcome Bonus | `P0` | `POST /auth/register` (chống enumeration + **bổ sung Anti-abuse block disposable email & IP rate-limit**), `POST /auth/confirm` (ACID khởi tạo `users`, `user_profiles`, `subscriptions` `FREE`, `wallets` tặng `200 Cr` Promo 30 ngày), `POST /auth/resend-otp`, UI `/register` & `/verify-otp`. | `TASK-AUTH-01..03`, `TASK-UI-01` | `DONE` *(Anti-abuse bổ sung ở `EP03-S0`)* |
-| **EP02-S2** | Đăng nhập, Silent Refresh & Logout/Revoke | `P0` | `POST /auth/login` (HttpOnly cookie `ws_refresh_token` & `ws_remember_me`), `POST /auth/refresh` (cookie-only), `POST /auth/logout` (`204`, `globalSignOut` + Redis Blocklist), Cognito JWKS RS256, UI `/login`. | `TASK-AUTH-04, 07, 08`, `TASK-UI-02` | `DONE` |
+| **EP02-S1** | Đăng ký Host, Xác thực OTP & Welcome Bonus | `P0` | `POST /auth/register` (`409 Conflict` khi trùng email active, confirm password & ASCII password validation; **Anti-abuse block disposable email & IP rate-limit bổ sung ở `EP03-S0`**), `POST /auth/confirm` (ACID khởi tạo `users`, `user_profiles`, `wallets` tặng `$2.00` Welcome Bonus — nâng cấp lên `FREE` + `200 Cr` Promo ở `EP03-S0`), `POST /auth/resend-otp`, UI `/register` & `/verify-otp`. | `TASK-AUTH-01..03`, `TASK-UI-01` | `DONE` *(Anti-abuse & 3 ngăn Credit bổ sung ở `EP03-S0`)* |
+| **EP02-S2** | Đăng nhập, Silent Refresh & Logout/Revoke | `P0` | `POST /auth/login` (HttpOnly cookie `ws_refresh_token` & `ws_remember_me`), `POST /auth/refresh` (cookie-only), `POST /auth/logout` (`204`, `RevokeToken`/`GlobalSignOut` + Redis Blocklist), Cognito JWKS RS256, UI `/login` & Account Menu trên `DashboardHeader`. | `TASK-AUTH-04, 07, 08`, `TASK-UI-02` | `DONE` |
 | **EP02-S3** | Quên mật khẩu & Đặt lại mật khẩu (OTP) | `P0` | `POST /auth/forgot-password` (anti-enumeration, 3 lần/15p), `POST /auth/reset-password` (5 lần sai OTP, `GlobalSignOut`), UI `/forgot-password` & `/reset-password`. | `TASK-AUTH-09..10`, `TASK-UI-03` | `DONE` |
-| **EP02-S4** | Đăng nhập Social SSO (Google & Apple) | `P1` | Cognito Hosted UI / OAuth2 callback cho Google & Apple SSO, xử lý `privaterelay.appleid.com`, khởi tạo `FREE` + `200 Cr` Welcome Bonus cho user SSO mới, nối `SocialSsoButtons`. | `TASK-AUTH-05..06` | `TODO` |
-| **EP02-S5** | Hồ sơ Cá nhân, VAT, Avatar S3, Đổi mật khẩu & Xóa tài khoản (`FR-107`) | `P0` *(Profile)* / `P1` *(VAT/GDPR)* | `GET /users/me` (trả profile + `entitlements` + 3 ngăn Credit), `PATCH /users/me/{profile,preferences}`, `PUT /users/me/billing-info`, `POST /users/me/avatar/{upload-url,confirm}`, `POST /users/me/change-password`, `DELETE /users/me` (GDPR); trang `/dashboard/profile`. | `TASK-AUTH-11`, `TASK-PROF-01..06`, `TASK-UI-04` | `TODO` |
+| **EP02-S4** | Đăng nhập Social SSO (Google & Apple) | `P1` | Cognito Hosted UI / OAuth2 callback cho Google & Apple SSO, xử lý `privaterelay.appleid.com`, khởi tạo `FREE` + `200 Cr` Welcome Bonus cho user SSO mới, nối `SocialSsoButtons` *(UI nút đã có)*. | `TASK-AUTH-05..06` | `TODO` |
+| **EP02-S5** | Hồ sơ Cá nhân, VAT, Avatar S3, Đổi mật khẩu & Xóa tài khoản (`FR-107`) | `P0` *(Profile)* / `P1` *(VAT/GDPR)* | `GET /users/me`, `PATCH /users/me/{profile,preferences}`, `PUT /users/me/billing-info`, `POST /users/me/avatar/{upload-url,confirm}`, `POST /users/me/change-password`, `DELETE /users/me` (GDPR: xóa Cognito + thu hồi phiên Redis + ẩn danh PII giữ sổ cái + cooldown đăng ký lại 7 ngày & không cấp quyền lợi tài khoản mới qua `deleted_account_records`); UI `/dashboard/profile` (kèm Danger Zone) & `/dashboard/settings`. *(Mở rộng `entitlements` + 3 ngăn Credit trong `GET /users/me` sẽ nối khi triển khai `EP03-S0`.)* | `TASK-AUTH-11`, `TASK-PROF-01..06`, `TASK-UI-04` | `DONE` |
 
 ---
 
@@ -106,12 +106,12 @@ flowchart TD
 
 | Mã Sub-Epic | Tên Sub-Epic | Ưu tiên | Scope & Deliverables chính | Tasks liên quan | Trạng thái |
 | :--- | :--- | :---: | :--- | :--- | :---: |
-| **EP03-S0** | Schema 4 Gói, Subscription, Credit Packs, `EntitlementGuard` & Cron Sweep | `P0` | Migration `0002_credit_plans_and_ledger` (`plans`, `subscriptions`, `credit_packs`, `credit_ledger`, nâng cấp `wallets` 3 ngăn); seed 4 gói (`$0`/`$19`/`$59`/`$199`) + 3 packs (`$10`/`$30`/`$100`); `EntitlementGuard` cache Redis; APIs `GET /plans`, `GET /credit-packs`, `GET/POST /subscriptions/*`; Cron sweep hết hạn + Grace Period 3 ngày + SES Notification Worker (8 sự kiện) + Anti-abuse blocklist cho `FREE`. | `TASK-PLAN-01..04` (`FR-501`, `FR-509`) | `TODO` |
-| **EP03-S1** | Ví Credit 3 Ngăn & Cài đặt Tiết kiệm | `P0` | REST API `GET /api/v1/wallets/me` (`promoCredits`, `planCredits`, `topupCredits`, `totalCredits`, hạn dùng), `PATCH /api/v1/wallets/me/settings` (`autoDegradeTts`); nối `WalletCard` 3 ngăn trên `/dashboard`. | `TASK-WAL-01..02` | `IN_PROGRESS` |
+| **EP03-S0** | Schema 4 Gói, Subscription, Credit Packs, `EntitlementGuard` & Cron Sweep | `P0` | Migration `0004_credit_plans_and_ledger` (`plans`, `subscriptions`, `credit_packs`, `credit_ledger`, nâng cấp `wallets` 3 ngăn); seed 4 gói (`$0`/`$19`/`$59`/`$199`) + 3 packs (`$10`/`$30`/`$100`); `EntitlementGuard` cache Redis; APIs `GET /plans`, `GET /credit-packs`, `GET/POST /subscriptions/*`; tái sử dụng `deleted_account_records` không cấp `200 Cr` Promo cho email tái đăng ký; Cron sweep hết hạn + Grace Period 3 ngày + SES Notification Worker (8 sự kiện) + Anti-abuse blocklist cho `FREE`. | `TASK-PLAN-01..04` (`FR-501`, `FR-509`) | `TODO` |
+| **EP03-S1** | Ví Credit 3 Ngăn & Cài đặt Tiết kiệm | `P0` | **Đã có**: `WalletRepository`/`WalletService` (schema USD đơn ngăn), `WalletCard` UI Preview trên `/dashboard` & trang public `/pricing`. **Còn lại**: REST API `GET /api/v1/wallets/me` (3 ngăn Credit + hạn dùng), `PATCH /api/v1/wallets/me/settings` (`autoDegradeTts`), nối dữ liệu thật cho `WalletCard`. | `TASK-WAL-01..02` | `IN_PROGRESS` |
 | **EP03-S2** | Thanh toán Quốc tế qua Stripe (Subscription + Top-up Pack) | `P1` *(hoặc `P0` nếu mở thị trường Global trước)* | `POST /subscriptions/checkout` & `POST /wallets/topup` (`PACK_S/M/L` + `% Bonus` theo gói), Webhook Stripe idempotent (`FOR UPDATE`, kích hoạt chu kỳ 30 ngày / xử lý `PAST_DUE` / cộng `topup_credits` + đồng bộ Redis). | `TASK-PAY-01..02` | `TODO` |
 | **EP03-S3** | Thanh toán Nội địa qua VietQR Động & Webhook IPN | `P0` *(thị trường VN)* | Sinh mã VietQR EMVCo cố định cho gói Subscription 30 ngày & Top-up Pack, Webhook SePay/Casso verify HMAC + regex `TR\d{6}` -> kích hoạt gói / cộng `topup_credits` + `PAYMENT_CONFIRMED` + gửi nhắc gia hạn T-7/T-3/T-1. | `TASK-PAY-03..04` | `TODO` |
 | **EP03-S4** | Thẻ đã lưu (PCI-DSS) & Tự động Nạp gói Credit (`Auto Top-up`) | `P1` | APIs Stripe SetupIntent (chỉ `BUSINESS+`), `PUT /wallets/auto-topup` (`thresholdCredits`, `packCode`), background job Stripe Off-session Charge kèm Redis lock `lock:auto_topup:{hostId}`. | `TASK-WAL-03..04`, `TASK-PAY-05` | `TODO` |
-| **EP03-S5** | Lịch sử Nạp tiền, Lịch sử Sử dụng, Promo Code & UI 4 Tab (`SCR-06`) | `P0` *(Lịch sử + Promo)* / `P1` *(PDF VAT)* | APIs `GET /wallets/me/topup-history`, `GET /wallets/me/usage-history` (`credit_ledger`), `GET /wallets/me/sessions/{roomId}/breakdown` (chi tiết từng giây + CSV), `GET /wallets/transactions/{txId}/receipt` (PDF VAT `BUSINESS+`), `POST /wallets/promo-redeem`; trang `/dashboard/billing` 4 tab. | `TASK-WAL-05..07`, `TASK-PAY-06`, `TASK-UI-11` | `IN_PROGRESS` |
+| **EP03-S5** | Lịch sử Nạp tiền, Lịch sử Sử dụng, Promo Code & UI 4 Tab (`SCR-06`) | `P0` *(Lịch sử + Promo)* / `P1` *(PDF VAT)* | **Đã có**: Service `WalletService.redeem_promo` & `WalletRepository.list_transactions`. **Còn lại**: APIs `GET /wallets/me/topup-history`, `GET /wallets/me/usage-history` (`credit_ledger`), `GET /wallets/me/sessions/{roomId}/breakdown` (chi tiết từng giây + CSV), `GET /wallets/transactions/{txId}/receipt` (PDF VAT `BUSINESS+`), `POST /wallets/promo-redeem`; trang `/dashboard/billing` 4 tab. | `TASK-WAL-05..07`, `TASK-PAY-06`, `TASK-UI-11` | `IN_PROGRESS` |
 
 ---
 
@@ -122,8 +122,8 @@ flowchart TD
 
 | Mã Sub-Epic | Tên Sub-Epic | Ưu tiên | Scope & Deliverables chính | Tasks liên quan | Trạng thái |
 | :--- | :--- | :---: | :--- | :--- | :---: |
-| **EP04-S1** | CRUD Bộ Từ điển Chuyên ngành & Đồng bộ AWS | `P1` | APIs `/api/v1/vocabularies` (CRUD + Import CSV/TXT kiểm tra hạn mức gói `PRO`: 2×50, `BUSINESS`: 10×256, `ENTERPRISE`: không giới hạn); Background sync lên Amazon Transcribe & Amazon Translate. | `TASK-VOC-01..08` | `TODO` |
-| **EP04-S2** | Tạo Phòng, Entitlement/Balance Check, Mic Check Lobby & QR | `P0` | Kiểm tra `EntitlementGuard` (`allowedRoomModes`, `maxTargetLangs`, `maxConcurrentRooms`) + `total_credits >= 10 phút` (`402`, cảnh báo x2 luồng ở `1-on-1`); tạo phòng `IDLE` (Mic Check Lobby `0 Cr`), APIs `POST/GET /rooms`, `GET /rooms/{id}/qr`; nối `/dashboard` + Modal Tạo phòng + Modal QR. | `TASK-ROOM-01..04, 12`, `TASK-UI-05..06, 08` | `IN_PROGRESS` |
+| **EP04-S1** | CRUD Bộ Từ điển Chuyên ngành & Đồng bộ AWS | `P1` | APIs `/api/v1/vocabularies` (CRUD + Import CSV/TXT kiểm tra hạn mức gói `PRO`: 2×50, `BUSINESS`: 10×256, `ENTERPRISE`: không giới hạn); Background sync lên Amazon Transcribe & Amazon Translate *(mới có ORM model `CustomVocabulary`)*. | `TASK-VOC-01..08` | `TODO` |
+| **EP04-S2** | Tạo Phòng, Entitlement/Balance Check, Mic Check Lobby & QR | `P0` | **Đã có**: ORM `Room` + `RoomRepository`, UI Preview `/dashboard` (`CreateRoomCard`, `RecentRoomsList`, lazy loading + skeleton). **Còn lại**: `EntitlementGuard` + balance check `>= 10 phút` (`402`), REST APIs `POST/GET /rooms`, `GET /rooms/{id}/qr`, Mic Check Lobby (`IDLE` `0 Cr`), nối API thật & Modal QR. | `TASK-ROOM-01..04, 12`, `TASK-UI-05..06, 08` | `IN_PROGRESS` |
 | **EP04-S3** | Guest Listener Join, Ephemeral Auth & Presence | `P0` | Public API `GET /rooms/check/{roomCode}`, `POST /rooms/join` (check passcode, kiểm tra `maxListeners` theo gói, ký Ephemeral JWT 4h chỉ Subscribe AppSync), `POST /rooms/{id}/heartbeat` (TTL 45s tự dọn sĩ số & `tts_count`). | `TASK-ROOM-05..06, 13` | `TODO` |
 | **EP04-S4** | Điều khiển Nóng Phiên Dịch (Hot-Config & State Machine) | `P0` | APIs `PATCH /rooms/{id}/languages` (check `maxTargetLangs`), `PATCH /rooms/{id}/permissions`, `POST /rooms/{id}/state` (`START`/`PAUSE`/`RESUME`/`END_ROOM`, giới hạn 15 phút cho gói `FREE`) & định tuyến song công `1-on-1`. | `TASK-ROOM-07..11` | `TODO` |
 | **EP04-S5** | Tính năng Mở rộng Theo Gói (`Scheduled`, `Multi-Speaker`, `Branding`, `Voice`, `Profanity`) | `P1` *(Scheduled, Profanity, Voice)* / `P2` *(Multi-Speaker, White-label)* | Lên lịch phòng trước (`PRO+`), lọc từ nhạy cảm (`PRO+`), chọn giọng TTS Nam/Nữ (`BUSINESS+`), phân quyền nhiều Diễn giả (`BUSINESS` 3 / `ENTERPRISE` 10), Custom Logo/Màu & White-label phòng nghe (`BUSINESS+`). | `TASK-ROOM-14..15` (`FR-207`, `FR-208`) | `TODO` |
@@ -194,7 +194,7 @@ flowchart TD
 | :--- | :--- | :---: | :--- | :--- | :---: |
 | **EP09-S1** | Zero-Downtime `SIGTERM` Handover & Crash Replay Failover | `P2` | Xử lý `SIGTERM` (`DRAINING` -> đợi `isFinal` -> `PREPARE_HANDOVER` -> Make-Before-Break 0ms); Crash Replay Failover `< 500ms` (mất ACK 300ms -> reconnect -> replay Redis Stream & Client Ring Buffer 5s). | `TASK-OPS-01..02` | `TODO` |
 | **EP09-S2** | Deep Health Check & CloudWatch Observability | `P1` *(Health)* / `P2` *(Alarms)* | Nâng cấp `GET /api/v1/health` kiểm tra PostgreSQL + Redis (`503` khi lỗi); CloudWatch Custom Metrics (`ActiveRoomsCount`, `Stt/Mt/Tts/E2E Latency P95`, `BillingDeductionErrorsCount`) + Alarm `E2E P95 > 1500ms` bắn SNS/Slack. | `TASK-OPS-03..04` | `TODO` |
-| **EP09-S3** | Admin Foundation (`require_admin`, `admin_audit_logs`, `pricing_configs`) & Executive Dashboard (`ADM-01`) | `P1` | Migration `0003_admin_portal` (`pricing_configs`, `admin_audit_logs` append-only); middleware `require_admin` & helper ghi Audit Log bắt buộc `reason`; `GET /admin/stats/overview` (Doanh thu Stripe/VietQR, COGS, Gross Margin % cảnh báo `< 55%`, phòng live). | `TASK-OPS-08..09` (`FR-604`) | `TODO` |
+| **EP09-S3** | Admin Foundation (`require_admin`, `admin_audit_logs`, `pricing_configs`) & Executive Dashboard (`ADM-01`) | `P1` | Migration `0005_admin_portal` (`pricing_configs`, `admin_audit_logs` append-only); middleware `require_admin` & helper ghi Audit Log bắt buộc `reason`; `GET /admin/stats/overview` (Doanh thu Stripe/VietQR, COGS, Gross Margin % cảnh báo `< 55%`, phòng live). | `TASK-OPS-08..09` (`FR-604`) | `TODO` |
 | **EP09-S4** | Admin Quản lý Host 360°, Ví Thủ công, Anti-Abuse & Gói/Bảng Giá Động (`ADM-02`, `ADM-03`) | `P1` *(Host/Pricing)* / `P2` *(B2B)* | APIs `GET /admin/hosts/*`, `POST /admin/hosts/{id}/{status,subscription}`, `POST /admin/wallets/{id}/adjust` (3 ngăn), `GET/PUT /admin/anti-abuse/domains`, `GET/PUT /admin/{plans,credit-packs,pricing}` (kèm tỷ giá VND + invalidate Redis cache). | `TASK-OPS-05, 07, 10` (`FR-605`, `FR-606`) | `TODO` |
 | **EP09-S5** | Admin Đối soát VietQR Thủ công, Hoàn tiền & Chiến dịch Promo (`ADM-04`, `ADM-05`) | `P1` *(VietQR Reconcile/Promo)* / `P2` *(Refund)* | APIs `GET /admin/transactions`, `POST /admin/transactions/{txId}/reconcile` (khớp tay sao kê VietQR idempotent), `POST /admin/transactions/{txId}/refund` (Stripe/VietQR + trừ ngược Credit), CRUD `/admin/promos` kèm thống kê hiệu quả. | `TASK-OPS-06, 11`, `TASK-PAY-07` (`FR-607`, `FR-608`) | `TODO` |
 | **EP09-S6** | Admin Live Rooms Force End, AI Kill-switch, Audit Logs & 6 Màn hình UI `/admin/*` (`ADM-06`) | `P2` | APIs `GET /admin/rooms/live`, `POST /admin/rooms/{id}/force-end`, `GET/PUT /admin/ai-providers/killswitch` (hạ nhanh AWS/Azure Speech `vi-VN` sang `Text-only`), `GET /admin/audit-logs`; triển khai 6 màn hình `SCR-ADM-01..06` trong `apps/web/src/app/(admin)/admin/*` với `AdminGuard` & Confirm Reason Modal. | `TASK-OPS-12..13`, `TASK-UI-12..13` (`FR-609`) | `TODO` |
@@ -204,7 +204,7 @@ flowchart TD
 ## 4. Lộ trình Phát hành theo 3 Phiên bản (Release Milestones)
 
 1. **Release `v1.0` — MVP Commercial Launch (`P0`)**:
-   - Auth Email/OTP (`DONE`) + Profile cơ bản (`EP02-S5`)
+   - Auth Email/OTP (`DONE`) + Profile/Settings/Avatar/VAT/Change Password (`DONE`, nối `entitlements` & 3 ngăn Credit sau `EP03-S0`)
    - 4 gói & `EntitlementGuard` (`EP03-S0`) + Ví Credit 3 ngăn (`EP03-S1`) + VietQR (`EP03-S3`) + Lịch sử Nạp/Sử dụng (`EP03-S5`)
    - Room Lifecycle, Mic Check Lobby & Guest Join (`EP04-S2..S4`) + AudioWorklet/WS Ingest (`EP05-S1..S3`)
    - Realtime AI Pipeline + Multi-Provider TTS `vi-VN` + Host Studio + Listener View (`EP06-S1..S5`)
@@ -212,4 +212,4 @@ flowchart TD
 2. **Release `v1.1` — Growth & Retention (`P1`)**:
    - Stripe Subscription/Top-up (`EP03-S2`), Auto Top-up (`EP03-S4`), VAT Invoice PDF (`EP03-S5`), Social SSO (`EP02-S4`), GDPR Delete (`EP02-S5`/`EP08-S2`), Custom Vocabularies (`EP04-S1`), Scheduled Rooms + Profanity Filter + TTS Voice Selection (`EP04-S5`), Bedrock AI Summary (`EP08-S3..S4`), Deep Health Check (`EP09-S2`).
 3. **Release `v2.0` — Enterprise Scale (`P2`)**:
-   - Multi-Speaker Co-Host & White-label Branding (`EP04-S5`), Session Analytics PDF (`EP08-S4`), Zero-Downtime 0ms `SIGTERM` Handover & Crash Replay (`EP09-S1`), CloudWatch Alarms (`EP09-S2`), System Admin Portal (`EP09-S3`).
+   - Multi-Speaker Co-Host & White-label Branding (`EP04-S5`), Session Analytics PDF (`EP08-S4`), Zero-Downtime 0ms `SIGTERM` Handover & Crash Replay (`EP09-S1`), CloudWatch Alarms (`EP09-S2`), System Admin Portal (`EP09-S3..S6`).

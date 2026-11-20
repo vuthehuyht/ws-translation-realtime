@@ -5,6 +5,12 @@ import ProfilePage from "./page";
 import { getAuthSession, saveAuthSession } from "@/lib/auth-storage";
 import type { UserMe } from "@/lib/user-api";
 
+const replaceMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: replaceMock }),
+}));
+
 const sampleUserMe: UserMe = {
   id: "user-1",
   email: "host@example.com",
@@ -34,6 +40,7 @@ const sampleUserMe: UserMe = {
 
 describe("Profile Page (/dashboard/profile)", () => {
   beforeEach(() => {
+    replaceMock.mockReset();
     window.localStorage.clear();
     window.sessionStorage.clear();
     saveAuthSession(
@@ -189,5 +196,35 @@ describe("Profile Page (/dashboard/profile)", () => {
     await waitFor(() => {
       expect(screen.getByText("Đã đổi mật khẩu thành công.")).toBeInTheDocument();
     });
+  });
+
+  it("deletes account via Danger Zone modal, clears session, and redirects to /login?deleted=1", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify(sampleUserMe), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    render(<ProfilePage />);
+
+    const deleteTrigger = await screen.findByRole("button", {
+      name: /^Xóa tài khoản$/i,
+    });
+    fireEvent.click(deleteTrigger);
+
+    fireEvent.change(screen.getByLabelText(/Nhập.*DELETE.*để xác nhận/i), {
+      target: { value: "DELETE" },
+    });
+    fireEvent.click(
+      screen.getByRole("button", { name: /Xóa vĩnh viễn tài khoản/i })
+    );
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/login?deleted=1");
+    });
+    expect(getAuthSession()).toBeNull();
   });
 });

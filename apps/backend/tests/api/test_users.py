@@ -1,7 +1,18 @@
 """Integration Tests for User Profile, Preferences, Billing Info, Avatar, and Security API."""
 
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.integrations.s3 import get_s3_client
+from app.models.room import Room
+from app.models.user import DeletedAccountRecord, User
+from app.models.wallet import PaymentTransaction
+from app.repositories.user_repository import hash_email
 
 pytestmark = pytest.mark.asyncio
 
@@ -305,3 +316,221 @@ async def test_change_password_success_and_wrong_old_password(async_client: Asyn
         json={"email": "pw.host@example.com", "password": "NewPassword456@"},
     )
     assert new_login.status_code == 200
+
+
+async def test_delete_me_validation_and_active_room_guard(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    # Unauthenticated request -> 401
+    unauth = await async_client.request(
+        "DELETE",
+        "/api/v1/users/me",
+        json={"confirmation": "DELETE"},
+    )
+    assert unauth.status_code == 401
+
+    auth = await _register_confirm_and_login(
+        async_client,
+        email="active.room.host@example.com",
+    )
+    headers = {"Authorization": f"Bearer {auth['access_token']}"}
+
+    # Wrong confirmation string -> 422
+    bad_confirm = await async_client.request(
+        "DELETE",
+        "/api/v1/users/me",
+        headers=headers,
+        json={"confirmation": "NOPE"},
+    )
+    assert bad_confirm.status_code == 422
+
+    # Active room owned by user blocks deletion with 409 Conflict
+    room = Room(
+        id="room-active-1",
+        host_id=auth["user_id"],
+        title="Live Event",
+        source_language="vi-VN",
+        target_languages=["en-US"],
+        status="ACTIVE",
+        host_token_hash="hashed-token",
+    )
+    db_session.add(room)
+    await db_session.commit()
+
+    conflict = await async_client.request(
+        "DELETE",
+        "/api/v1/users/me",
+        headers=headers,
+        json={"confirmation": "DELETE"},
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["error"]["code"] == "RESOURCE_CONFLICT"
+
+
+async def test_delete_me_gdpr_anonymization_cooldown_and_no_welcome_bonus_on_reregister(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    email = "gdpr.host@example.com"
+    password = "ValidPass123!"  # noqa: S105
+    auth = await _register_confirm_and_login(
+        async_client,
+        email=email,
+        password=password,
+        full_name="GDPR Host",
+    )
+    headers = {"Authorization": f"Bearer {auth['access_token']}"}
+    first_user_id = auth["user_id"]
+
+    # Populate profile PII, billing info, and upload an avatar to S3
+    await async_client.patch(
+        "/api/v1/users/me/profile",
+        headers=headers,
+        json={"phoneNumber": "+84901234567", "bio": "Private bio"},
+    )
+    await async_client.put(
+        "/api/v1/users/me/billing-info",
+        headers=headers,
+        json={
+            "companyName": "Secret Corp",
+            "taxCode": "0101234567",
+            "companyAddress": "HCMC",
+        },
+    )
+    upload_resp = await async_client.post(
+        "/api/v1/users/me/avatar/upload-url",
+        headers=headers,
+        json={"fileName": "me.png", "fileType": "image/png", "fileSizeBytes": 256},
+    )
+    s3_key = upload_resp.json()["s3Key"]
+    await async_client.put(
+        upload_resp.json()["uploadUrl"],
+        content=b"\x89PNG\r\n\x1a\nbytes",
+        headers={"Content-Type": "image/png"},
+    )
+    await async_client.post(
+        "/api/v1/users/me/avatar/confirm",
+        headers=headers,
+        json={"s3Key": s3_key},
+    )
+    assert await get_s3_client().object_exists(s3_key) is True
+
+    # 1. Delete account -> 204, no-store headers, cookies cleared
+    delete_resp = await async_client.request(
+        "DELETE",
+        "/api/v1/users/me",
+        headers=headers,
+        json={"confirmation": "DELETE"},
+    )
+    assert delete_resp.status_code == 204
+    assert delete_resp.headers.get("cache-control") == "no-store"
+    set_cookie_header = " ".join(delete_resp.headers.get_list("set-cookie"))
+    assert "ws_refresh_token=" in set_cookie_header
+
+    # 2. Existing JWT is immediately revoked in Redis, login & refresh fail
+    after_me = await async_client.get("/api/v1/users/me", headers=headers)
+    assert after_me.status_code == 401
+
+    after_login = await async_client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert after_login.status_code == 401
+
+    # 3. Verify DB anonymization preserved financial ledger and scrubbed PII
+    db_session.expire_all()
+    anonymized_user = (
+        await db_session.execute(select(User).where(User.id == first_user_id))
+    ).scalar_one()
+    assert anonymized_user.status == "DELETED"
+    assert anonymized_user.email == f"deleted_{first_user_id}@anonymized.invalid"
+
+    await db_session.refresh(anonymized_user, attribute_names=["profile", "wallet"])
+    assert anonymized_user.profile.full_name == "Deleted User"
+    assert anonymized_user.profile.phone_number is None
+    assert anonymized_user.profile.bio is None
+    assert anonymized_user.profile.avatar_url is None
+    assert anonymized_user.profile.company_name is None
+    assert anonymized_user.profile.tax_code is None
+    assert anonymized_user.profile.company_address is None
+    assert anonymized_user.wallet.auto_topup_enabled is False
+
+    # Financial ledger remains intact under the anonymized user id
+    txs = (
+        (
+            await db_session.execute(
+                select(PaymentTransaction).where(PaymentTransaction.host_id == first_user_id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(txs) == 1
+    assert txs[0].type == "PROMO_CREDIT"
+
+    # Avatar deleted from S3
+    assert await get_s3_client().object_exists(s3_key) is False
+
+    # 4. DeletedAccountRecord created with hashed email and 7-day cooldown
+    deleted_record = (
+        await db_session.execute(
+            select(DeletedAccountRecord).where(DeletedAccountRecord.email_hash == hash_email(email))
+        )
+    ).scalar_one()
+    assert deleted_record.deletion_count == 1
+
+    # 5. Re-registration within 7 days is rejected with 403 ACCOUNT_RE_REGISTRATION_COOLDOWN
+    early_reg = await async_client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": password, "fullName": "Returning Host"},
+    )
+    assert early_reg.status_code == 403
+    early_err = early_reg.json()["error"]
+    assert early_err["code"] == "ACCOUNT_RE_REGISTRATION_COOLDOWN"
+    assert "reRegisterAllowedAt" in early_err["details"]
+    assert early_err["details"]["retryAfterSeconds"] > 0
+
+    # 6. Simulate 7 days elapsed -> re-registration succeeds WITHOUT new-account welcome bonus
+    deleted_record.re_register_allowed_at = datetime.now(UTC) - timedelta(seconds=10)
+    await db_session.commit()
+
+    returning_auth = await _register_confirm_and_login(
+        async_client,
+        email=email,
+        password=password,
+        full_name="Returning Host",
+    )
+    returning_headers = {"Authorization": f"Bearer {returning_auth['access_token']}"}
+    returning_me = await async_client.get("/api/v1/users/me", headers=returning_headers)
+    assert returning_me.status_code == 200
+    assert Decimal(returning_me.json()["wallet"]["balance"]) == Decimal("0.0000")
+
+    returning_txs = (
+        (
+            await db_session.execute(
+                select(PaymentTransaction).where(
+                    PaymentTransaction.host_id == returning_auth["user_id"]
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert returning_txs == []
+
+    # 7. Deleting the re-registered account increments deletion_count via upsert
+    second_delete = await async_client.request(
+        "DELETE",
+        "/api/v1/users/me",
+        headers=returning_headers,
+        json={"confirmation": "DELETE"},
+    )
+    assert second_delete.status_code == 204
+    db_session.expire_all()
+    updated_record = (
+        await db_session.execute(
+            select(DeletedAccountRecord).where(DeletedAccountRecord.email_hash == hash_email(email))
+        )
+    ).scalar_one()
+    assert updated_record.deletion_count == 2

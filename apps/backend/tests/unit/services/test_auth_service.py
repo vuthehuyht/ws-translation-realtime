@@ -1,6 +1,7 @@
 """Unit tests for AuthService (app.services.auth_service)."""
 
 import time
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
@@ -19,7 +20,7 @@ from app.core.exceptions import (
 )
 from app.integrations.cognito import MockCognitoClient
 from app.models.user import User, UserProfile
-from app.repositories.user_repository import UserRepository
+from app.repositories.user_repository import UserRepository, hash_email
 from app.repositories.wallet_repository import WalletRepository
 from app.schemas.requests import (
     ConfirmRequest,
@@ -575,3 +576,82 @@ async def test_forgot_password_preserves_slot_on_cognito_throttle_and_rolls_back
     with pytest.raises(BadGatewayException, match="Provider down"):
         await service.forgot_password(ForgotPasswordRequest(email="err@example.com"))
     await redis.aclose()
+
+
+async def test_auth_service_register_blocks_deleted_email_during_7_day_cooldown(
+    db_session: AsyncSession,
+) -> None:
+    user_repo = UserRepository(session=db_session)
+    wallet_repo = WalletRepository(session=db_session)
+    mock_cognito = MockCognitoClient()
+    mock_cognito.sign_up = AsyncMock(  # type: ignore[method-assign]
+        side_effect=AssertionError("Cognito sign_up must not be called during cooldown")
+    )
+    service = AuthService(
+        user_repo=user_repo,
+        wallet_repo=wallet_repo,
+        cognito_client=mock_cognito,
+    )
+
+    now = datetime.now(UTC)
+    allowed_at = now + timedelta(days=5)
+    await user_repo.upsert_deleted_account_record(
+        email_hash=hash_email("cooldown@example.com"),
+        deleted_at=now - timedelta(days=2),
+        re_register_allowed_at=allowed_at,
+    )
+
+    with pytest.raises(ForbiddenException) as exc_info:
+        await service.register(
+            RegisterRequest(
+                email="  COOLDOWN@Example.COM ",
+                password="SuperPassword123@",
+                fullName="Returning Host",
+            )
+        )
+
+    assert exc_info.value.error_code == "ACCOUNT_RE_REGISTRATION_COOLDOWN"
+    assert exc_info.value.details["reRegisterAllowedAt"] == allowed_at.isoformat()
+    assert exc_info.value.details["retryAfterSeconds"] > 0
+
+
+async def test_auth_service_confirm_withholds_welcome_bonus_after_cooldown_expires(
+    db_session: AsyncSession,
+) -> None:
+    user_repo = UserRepository(session=db_session)
+    wallet_repo = WalletRepository(session=db_session)
+    mock_cognito = MockCognitoClient()
+    service = AuthService(
+        user_repo=user_repo,
+        wallet_repo=wallet_repo,
+        cognito_client=mock_cognito,
+    )
+
+    email = "returning.host@example.com"
+    now = datetime.now(UTC)
+    await user_repo.upsert_deleted_account_record(
+        email_hash=hash_email(email),
+        deleted_at=now - timedelta(days=8),
+        re_register_allowed_at=now - timedelta(days=1),
+    )
+
+    reg_res = await service.register(
+        RegisterRequest(
+            email=email,
+            password="SuperPassword123@",
+            fullName="Returning Host",
+        )
+    )
+    assert reg_res.status == "CONFIRMATION_REQUIRED"
+
+    confirm_res = await service.confirm_sign_up(
+        ConfirmRequest(email=email, otpCode="123456")
+    )
+    assert confirm_res.status == "CONFIRMED"
+
+    user = await user_repo.get_by_email(email)
+    assert user is not None
+    wallet = await wallet_repo.get_by_host_id(user.id)
+    assert wallet is not None
+    assert wallet.balance == Decimal("0.0000")
+    assert await wallet_repo.get_transaction_by_provider_id(f"welcome_{user.id}") is None

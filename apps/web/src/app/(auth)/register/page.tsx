@@ -28,6 +28,28 @@ export default function RegisterPage() {
           setServerError("Email này đã được đăng ký. Vui lòng đăng nhập hoặc dùng email khác.");
           return;
         }
+        if (error.code === "ACCOUNT_RE_REGISTRATION_COOLDOWN") {
+          const allowedAt =
+            typeof error.details === "object" &&
+            error.details !== null &&
+            !Array.isArray(error.details) &&
+            typeof error.details.reRegisterAllowedAt === "string"
+              ? new Date(error.details.reRegisterAllowedAt)
+              : null;
+          const formattedDateTime =
+            allowedAt && !Number.isNaN(allowedAt.getTime())
+              ? allowedAt.toLocaleString("vi-VN", {
+                  dateStyle: "short",
+                  timeStyle: "short",
+                })
+              : null;
+          setServerError(
+            formattedDateTime
+              ? `Email này vừa được xóa tài khoản và cần chờ đủ 7 ngày mới có thể đăng ký lại (sau ${formattedDateTime}).`
+              : "Email này vừa được xóa tài khoản và cần chờ đủ 7 ngày mới có thể đăng ký lại."
+          );
+          return;
+        }
         setServerError(error.message);
         return;
       }

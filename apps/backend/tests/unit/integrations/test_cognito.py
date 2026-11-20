@@ -576,3 +576,41 @@ async def test_aws_cognito_admin_global_sign_out_raises_bad_gateway_on_access_de
 
     with pytest.raises(BadGatewayException):
         await cognito.admin_global_sign_out("host@example.com")
+
+
+async def test_mock_cognito_delete_user_removes_account_and_sessions() -> None:
+    cognito = MockCognitoClient()
+    email = "delete.mock@example.com"
+    password = "SecurePassword123@"
+
+    await cognito.sign_up(email=email, password=password, full_name="Delete Mock")
+    await cognito.confirm_sign_up(email=email, confirmation_code="123456")
+    tokens = await cognito.authenticate(email=email, password=password)
+
+    await cognito.delete_user(tokens["accessToken"])
+
+    assert email not in cognito.users
+    with pytest.raises(UnauthorizedException):
+        await cognito.refresh_tokens(tokens["refreshToken"])
+    with pytest.raises(UnauthorizedException):
+        await cognito.delete_user(tokens["accessToken"])
+
+
+async def test_aws_cognito_delete_user_success_and_error_mappings() -> None:
+    mock_boto = AsyncMock()
+    cognito = _make_aws_cognito_with_mock_client(mock_boto)
+
+    await cognito.delete_user("access-jwt")
+    mock_boto.delete_user.assert_awaited_once_with(AccessToken="access-jwt")
+
+    mock_boto.delete_user.side_effect = _make_client_error("NotAuthorizedException", "Expired")
+    with pytest.raises(UnauthorizedException, match="invalid or expired"):
+        await cognito.delete_user("access-jwt")
+
+    mock_boto.delete_user.side_effect = _make_client_error("TooManyRequestsException", "Rate")
+    with pytest.raises(TooManyRequestsException, match="Too many"):
+        await cognito.delete_user("access-jwt")
+
+    mock_boto.delete_user.side_effect = _make_client_error("InternalErrorException", "Down")
+    with pytest.raises(BadGatewayException):
+        await cognito.delete_user("access-jwt")

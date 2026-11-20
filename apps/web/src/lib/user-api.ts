@@ -80,6 +80,10 @@ export interface ChangePasswordResponse {
   message: string;
 }
 
+export interface DeleteAccountPayload {
+  confirmation: "DELETE";
+}
+
 export const SUPPORTED_LANGUAGE_OPTIONS = [
   { code: "vi-VN", label: "Tiếng Việt (vi-VN)" },
   { code: "en-US", label: "English - US (en-US)" },
@@ -261,6 +265,14 @@ export function changePassword(
 ): Promise<ChangePasswordResponse> {
   return apiRequest<ChangePasswordResponse>("/api/v1/users/me/change-password", {
     method: "POST",
+    auth: true,
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteAccount(payload: DeleteAccountPayload): Promise<void> {
+  return apiRequest<void>("/api/v1/users/me", {
+    method: "DELETE",
     auth: true,
     body: JSON.stringify(payload),
   });

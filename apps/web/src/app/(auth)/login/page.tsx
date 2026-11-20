@@ -17,12 +17,15 @@ function LoginPageContent() {
 
   const isVerified = searchParams.get("verified") === "1";
   const isPasswordReset = searchParams.get("reset") === "success";
+  const isAccountDeleted = searchParams.get("deleted") === "1";
   const initialEmail = searchParams.get("email") ?? "";
   const infoBanner = isVerified
     ? "Tài khoản của bạn đã được xác thực thành công. Vui lòng đăng nhập để tiếp tục."
     : isPasswordReset
       ? "Mật khẩu đã được đặt lại thành công. Vui lòng đăng nhập bằng mật khẩu mới."
-      : null;
+      : isAccountDeleted
+        ? "Tài khoản của bạn đã được xóa và ẩn danh dữ liệu cá nhân. Bạn có thể đăng ký lại bằng email này sau 7 ngày (không bao gồm ưu đãi tài khoản mới)."
+        : null;
 
   const handleLoginSuccess = async (data: LoginFormData) => {
     setServerError(null);

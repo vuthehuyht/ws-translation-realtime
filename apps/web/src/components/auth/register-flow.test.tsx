@@ -177,4 +177,47 @@ describe("Full Registration Flow (RegisterPage -> VerifyOtpPage)", () => {
     );
     expect(pushMock).not.toHaveBeenCalled();
   });
+
+  it("shows 7-day cooldown message on RegisterPage when email was recently deleted", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: "ACCOUNT_RE_REGISTRATION_COOLDOWN",
+            message:
+              "This email was recently deleted and cannot be re-registered for 7 days.",
+            details: {
+              reRegisterAllowedAt: "2026-11-27T12:00:00+00:00",
+              retryAfterSeconds: 604800,
+            },
+          },
+        }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    render(<RegisterPage />);
+
+    fireEvent.change(screen.getByLabelText(/Họ và tên/i), {
+      target: { value: "Returning Host" },
+    });
+    fireEvent.change(screen.getByLabelText(/Địa chỉ Email/i), {
+      target: { value: "deleted@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Mật khẩu/i), {
+      target: { value: "StrongPass123!" },
+    });
+    fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/i), {
+      target: { value: "StrongPass123!" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Điều khoản Dịch vụ/i })
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Tạo tài khoản" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /vừa được xóa tài khoản.*7 ngày/i
+    );
+    expect(pushMock).not.toHaveBeenCalled();
+  });
 });
