@@ -16,6 +16,7 @@ from botocore.exceptions import ClientError
 from app.core.config import get_settings
 from app.core.exceptions import (
     BadGatewayException,
+    BadRequestException,
     ConflictException,
     NotFoundException,
     TooManyRequestsException,
@@ -95,6 +96,15 @@ class CognitoClient:
 
     async def global_sign_out(self, access_token: str) -> None:
         """Invalidate every refresh token of the access token's user on all devices."""
+        raise NotImplementedError
+
+    async def change_password(
+        self,
+        access_token: str,
+        previous_password: str,
+        proposed_password: str,
+    ) -> None:
+        """Change the password for an authenticated user via Cognito ChangePassword."""
         raise NotImplementedError
 
     async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
@@ -259,6 +269,24 @@ class MockCognitoClient(CognitoClient):
         for token, session in list(self.refresh_sessions.items()):
             if session.sub == subject:
                 del self.refresh_sessions[token]
+
+    async def change_password(
+        self,
+        access_token: str,
+        previous_password: str,
+        proposed_password: str,
+    ) -> None:
+        try:
+            subject = decode_access_token(access_token).get("sub")
+        except ValueError as e:
+            raise UnauthorizedException("Access token is invalid or expired") from e
+
+        user = next((u for u in self.users.values() if u.sub == subject), None)
+        if not user or not user.is_confirmed:
+            raise UnauthorizedException("Access token is invalid or expired")
+        if user.password != previous_password:
+            raise BadRequestException("Current password is incorrect")
+        user.password = proposed_password
 
     async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:
         # Offline mock tokens are HS256 JWTs signed with the local secret.
@@ -596,6 +624,38 @@ class AwsCognitoClient(CognitoClient):
                         "Too many sign-out requests. Please try again later."
                     ) from e
                 logger.error("Cognito global_sign_out ClientError: %s - %s", error_code, error_msg)
+                raise BadGatewayException("Authentication provider error") from e
+
+    async def change_password(
+        self,
+        access_token: str,
+        previous_password: str,
+        proposed_password: str,
+    ) -> None:
+        """Call Cognito ChangePassword for an authenticated user."""
+        async with self.session.client("cognito-idp", region_name=self.region) as client:
+            try:
+                await client.change_password(
+                    PreviousPassword=previous_password,
+                    ProposedPassword=proposed_password,
+                    AccessToken=access_token,
+                )
+            except ClientError as e:
+                error_code = e.response.get("Error", {}).get("Code")
+                error_msg = e.response.get("Error", {}).get("Message", str(e))
+                if error_code == "NotAuthorizedException":
+                    # Cognito returns NotAuthorizedException both for wrong current password and
+                    # expired tokens; distinguish by message so wrong current password maps to 400.
+                    if "incorrect username or password" in error_msg.lower():
+                        raise BadRequestException("Current password is incorrect") from e
+                    raise UnauthorizedException("Access token is invalid or expired") from e
+                if error_code == "InvalidPasswordException":
+                    raise ValidationException(f"Password does not meet policy: {error_msg}") from e
+                if error_code in ("LimitExceededException", "TooManyRequestsException"):
+                    raise TooManyRequestsException(
+                        "Too many password change attempts. Please try again later."
+                    ) from e
+                logger.error("Cognito change_password ClientError: %s - %s", error_code, error_msg)
                 raise BadGatewayException("Authentication provider error") from e
 
     async def verify_access_token(self, token: str, *, verify_exp: bool = True) -> dict[str, Any]:

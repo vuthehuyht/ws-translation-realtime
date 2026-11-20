@@ -123,6 +123,7 @@ export interface UserProfile {
   role: string;
   status: string;
   fullName: string | null;
+  avatarUrl?: string | null;
   defaultSourceLang: string | null;
   defaultTargetLangs: string[];
   timezone: string;

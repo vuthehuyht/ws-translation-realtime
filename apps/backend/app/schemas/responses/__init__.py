@@ -12,8 +12,18 @@ from app.schemas.responses.auth import (
     UserProfileResponse,
 )
 from app.schemas.responses.health import HealthResponse
+from app.schemas.responses.user import (
+    AvatarConfirmResponse,
+    AvatarUploadUrlResponse,
+    ChangePasswordResponse,
+    UserMeResponse,
+    WalletSummaryResponse,
+)
 
 __all__ = [
+    "AvatarConfirmResponse",
+    "AvatarUploadUrlResponse",
+    "ChangePasswordResponse",
     "ConfirmResponse",
     "ForgotPasswordResponse",
     "HealthResponse",
@@ -23,5 +33,7 @@ __all__ = [
     "ResendOtpResponse",
     "ResetPasswordResponse",
     "TokenResponse",
+    "UserMeResponse",
     "UserProfileResponse",
+    "WalletSummaryResponse",
 ]

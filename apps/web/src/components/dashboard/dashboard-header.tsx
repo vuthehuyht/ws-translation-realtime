@@ -19,11 +19,13 @@ import { cn } from "@/lib/utils";
 interface DashboardHeaderProps {
   userName?: string | null;
   userEmail?: string;
+  avatarUrl?: string | null;
 }
 
 export function DashboardHeader({
   userName,
   userEmail,
+  avatarUrl,
 }: DashboardHeaderProps) {
   const router = useRouter();
 
@@ -122,8 +124,17 @@ export function DashboardHeader({
               isMenuOpen && "border-primary/40 bg-muted/60"
             )}
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600/15 text-xs font-bold text-indigo-600">
-              {avatarInitial}
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-indigo-600/15 text-xs font-bold text-indigo-600">
+              {avatarUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={avatarUrl}
+                  alt={displayName}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                avatarInitial
+              )}
             </span>
             <div className="hidden leading-tight md:block">
               <p className="max-w-[160px] truncate text-xs font-semibold text-foreground">
@@ -161,37 +172,25 @@ export function DashboardHeader({
               </div>
 
               <div className="py-1">
-                <button
-                  type="button"
+                <Link
+                  href="/dashboard/profile"
                   role="menuitem"
-                  disabled
-                  title="Trang Hồ sơ cá nhân đang được phát triển"
-                  className="flex w-full cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground/70"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                 >
-                  <span className="inline-flex items-center gap-2">
-                    <User className="h-3.5 w-3.5" />
-                    <span>Hồ sơ cá nhân</span>
-                  </span>
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    Sắp ra mắt
-                  </span>
-                </button>
+                  <User className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Hồ sơ cá nhân</span>
+                </Link>
 
-                <button
-                  type="button"
+                <Link
+                  href="/dashboard/settings"
                   role="menuitem"
-                  disabled
-                  title="Trang Cài đặt đang được phát triển"
-                  className="flex w-full cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground/70"
+                  onClick={() => setIsMenuOpen(false)}
+                  className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-muted"
                 >
-                  <span className="inline-flex items-center gap-2">
-                    <Settings className="h-3.5 w-3.5" />
-                    <span>Cài đặt</span>
-                  </span>
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    Sắp ra mắt
-                  </span>
-                </button>
+                  <Settings className="h-3.5 w-3.5 text-muted-foreground" />
+                  <span>Cài đặt</span>
+                </Link>
 
                 <button
                   type="button"
