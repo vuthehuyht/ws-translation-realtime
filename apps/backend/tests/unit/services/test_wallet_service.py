@@ -66,7 +66,7 @@ async def test_wallet_service_top_up_and_deduct_usage(db_session: AsyncSession) 
     assert post_deduct_wallet.balance == Decimal("29.9935")
 
     # 5. Overdraft attempt raises PaymentRequiredException
-    with pytest.raises(PaymentRequiredException, match="Insufficient funds"):
+    with pytest.raises(PaymentRequiredException, match="Insufficient credits"):
         await service.deduct_usage(
             host_id=host_id,
             cost=Decimal("50.0000"),

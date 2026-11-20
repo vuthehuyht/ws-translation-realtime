@@ -28,8 +28,8 @@ const PLANS = [
     highlight: true,
     features: [
       "1-on-1 & Broadcast (3 ngôn ngữ, 100 người)",
-      "Giọng đọc Neural TTS + Lọc từ nhạy cảm",
-      "Passcode + Lên lịch phòng trước",
+      "Giọng đọc Neural TTS + lọc từ nhạy cảm",
+      "Passcode + lên lịch phòng trước",
       "Export .txt/.md (30 ngày) + AI Summary gốc",
     ],
   },
@@ -74,19 +74,19 @@ const COMPARISON_GROUPS: {
   rows: { label: string; values: [CellValue, CellValue, CellValue, CellValue] }[];
 }[] = [
   {
-    group: "Phòng & Điều khiển",
+    group: "Phòng & điều khiển",
     rows: [
       { label: "Chế độ phòng", values: ["1-on-1", "1-on-1 & Broadcast", "1-on-1 & Broadcast", "1-on-1 & Broadcast"] },
       { label: "Ngôn ngữ đích đồng thời", values: ["1", "3", "6", "10"] },
       { label: "Sĩ số người nghe tối đa", values: ["2", "100", "300", "1.000"] },
       { label: "Số phòng chạy song song", values: ["1 (tối đa 15p)", "1", "3", "10"] },
-      { label: "Mật khẩu phòng & Lên lịch trước", values: [false, true, true, true] },
+      { label: "Mật khẩu phòng & lên lịch trước", values: [false, true, true, true] },
       { label: "Nhiều diễn giả luân phiên (Co-Host)", values: ["1", "1", "3", "10"] },
       { label: "Tùy biến thương hiệu phòng nghe", values: [false, false, "Custom Logo/Màu", "Full White-label"] },
     ],
   },
   {
-    group: "AI & Giọng đọc",
+    group: "AI & giọng đọc",
     rows: [
       { label: "Giọng đọc Neural TTS (Polly + Azure vi-VN)", values: [false, true, true, true] },
       { label: "Chọn giọng đọc Nam / Nữ theo ngôn ngữ", values: [false, false, true, true] },
@@ -95,17 +95,17 @@ const COMPARISON_GROUPS: {
     ],
   },
   {
-    group: "Biên bản & Hậu kỳ",
+    group: "Biên bản & hậu kỳ",
     rows: [
       { label: "Thời gian lưu trữ biên bản trên S3", values: ["7 ngày", "30 ngày", "90 ngày", "365 ngày"] },
       { label: "Định dạng xuất file biên bản", values: ["Chỉ xem online", ".txt, .md", ".txt, .md, .srt, .vtt, .csv", "Full định dạng"] },
-      { label: "Cho phép Người nghe tải biên bản", values: [false, false, true, true] },
-      { label: "AI Tóm tắt Cuộc họp (Bedrock)", values: [false, "Ngôn ngữ gốc (15 Cr)", "Đa ngôn ngữ (25 Cr)", "Đa ngôn ngữ (25 Cr)"] },
+      { label: "Cho phép người nghe tải biên bản", values: [false, false, true, true] },
+      { label: "AI tóm tắt cuộc họp (Bedrock)", values: [false, "Ngôn ngữ gốc (15 Cr)", "Đa ngôn ngữ (25 Cr)", "Đa ngôn ngữ (25 Cr)"] },
       { label: "Thống kê phân tích phiên (Analytics)", values: ["Cơ bản", "Cơ bản", "Chi tiết + CSV", "Chi tiết + PDF"] },
     ],
   },
   {
-    group: "Thanh toán & Hỗ trợ",
+    group: "Thanh toán & hỗ trợ",
     rows: [
       { label: "Hạ cấp mềm tắt TTS khi còn < 1 phút", values: [false, true, true, true] },
       { label: "Tự động nạp gói Credit (Auto Top-up)", values: [false, false, true, true] },
@@ -160,7 +160,7 @@ export default function PricingCreditsProductPage() {
 
   return (
     <ProductPageShell
-      badge="Bảng giá & Gói cước"
+      badge="Bảng giá & gói cước"
       title="Bảng giá minh bạch, tính cước chính xác theo từng giây"
       subtitle="Quy đổi đơn giản 1 USD = 100 Credits. Luôn ưu tiên trừ Credit sắp hết hạn trước (Khuyến mãi -> Gói tháng -> Nạp thêm không hết hạn) và chỉ tính đúng thời lượng sử dụng thực tế."
     >
@@ -205,7 +205,7 @@ export default function PricingCreditsProductPage() {
           <div className="flex items-center gap-2">
             <Coins className="h-4 w-4 text-indigo-600" />
             <h2 className="text-base font-bold text-foreground">
-              Bộ mô phỏng Tốc độ tiêu thụ Credit (Burn Rate)
+              Bộ mô phỏng tốc độ tiêu thụ Credit (Burn Rate)
             </h2>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -276,7 +276,7 @@ export default function PricingCreditsProductPage() {
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-indigo-600" />
             <h2 className="text-base font-bold text-foreground">
-              3 Gói Top-up Lẻ cố định (Không hết hạn)
+              3 gói Top-up lẻ cố định (không hết hạn)
             </h2>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -368,7 +368,7 @@ export default function PricingCreditsProductPage() {
         <div className="flex items-center gap-2">
           <HelpCircle className="h-4 w-4 text-indigo-600" />
           <h2 className="text-base font-bold text-foreground">
-            Câu hỏi thường gặp về Gói &amp; Ví Credit
+            Câu hỏi thường gặp về gói &amp; ví Credit
           </h2>
         </div>
 

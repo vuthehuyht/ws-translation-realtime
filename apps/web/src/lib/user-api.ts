@@ -2,7 +2,6 @@ import { ApiError, apiRequest, getApiBaseUrl } from "./api-client";
 
 export interface WalletSummary {
   balance: string;
-  currency: string;
   autoDegradeTts: boolean;
   autoTopupEnabled: boolean;
 }

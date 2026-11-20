@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 const SECTIONS = [
   {
-    title: "1. Phạm vi dịch vụ & Tài khoản",
+    title: "1. Phạm vi dịch vụ & tài khoản",
     points: [
       "VoiceBridge AI cung cấp nền tảng dịch thuật giọng nói và phụ đề thời gian thực (Speech-to-Speech & Speech-to-Text) cho chế độ 1-on-1 và hội thảo Broadcast đa ngôn ngữ.",
       "Chủ phòng (Host) chịu trách nhiệm bảo mật thông tin đăng nhập, nội dung phát biểu trong phòng và thông báo cho người tham gia rằng phiên đang được phiên dịch và lưu biên bản bằng AI.",
@@ -19,7 +19,7 @@ const SECTIONS = [
     ],
   },
   {
-    title: "2. Gói dịch vụ, Ví Credit 3 ngăn & Thanh toán",
+    title: "2. Gói dịch vụ, ví Credit 3 ngăn & thanh toán",
     points: [
       "Đơn vị sử dụng dịch vụ là Credit (1 USD = 100 Credits). Hệ thống cung cấp 4 gói thuê bao cố định theo tháng (FREE, PRO, BUSINESS, ENTERPRISE) cùng 3 gói nạp lẻ cố định (PACK_S, PACK_M, PACK_L).",
       "Mỗi ví duy trì 3 ngăn Credit và ưu tiên khấu trừ theo thứ tự: Promo Credits (có hạn dùng) -> Plan Credits (reset cuối chu kỳ gói tháng) -> Top-up Credits (không hết hạn, bảo toàn kể cả khi hạ gói).",
@@ -27,7 +27,7 @@ const SECTIONS = [
     ],
   },
   {
-    title: "3. Cơ chế Tính cước Theo Từng Giây & Bảo vệ Chi phí",
+    title: "3. Cơ chế tính cước theo từng giây & bảo vệ chi phí",
     points: [
       "Chi phí phòng dịch được đo và khấu trừ chính xác theo từng giây sử dụng thực tế (Per-Second Billing) dựa trên thời lượng tiếng nói (sau lọc khoảng lặng VAD), số ký tự dịch, số ký tự tổng hợp giọng đọc khi có người bật loa và tổng người-giây kết nối.",
       "Mọi khung âm thanh hoặc ký tự phát sinh lỗi 5xx từ phía nhà cung cấp AI sẽ không bị trừ Credit (0 Cr).",
@@ -35,14 +35,14 @@ const SECTIONS = [
     ],
   },
   {
-    title: "4. Chính sách Sử dụng Hợp lệ & Chống Lạm dụng",
+    title: "4. Chính sách sử dụng hợp lệ & chống lạm dụng",
     points: [
       "Nghiêm cấm sử dụng dịch vụ để truyền bá nội dung vi phạm pháp luật, xâm phạm bản quyền hoặc tạo hàng loạt tài khoản bằng email dùng một lần nhằm trục lợi Credit dùng thử (Welcome Bonus).",
       "VoiceBridge AI có quyền tạm khóa tài khoản hoặc đóng khẩn cấp phòng đang hoạt động nếu phát hiện hành vi gian lận thanh toán hoặc vi phạm nghiêm trọng điều khoản này.",
     ],
   },
   {
-    title: "5. Hoàn tiền & Liên hệ",
+    title: "5. Hoàn tiền & liên hệ",
     points: [
       "Yêu cầu hoàn tiền đối với giao dịch lỗi kỹ thuật hoặc thanh toán nhầm được tiếp nhận trong vòng 7 ngày qua email support@voicebridge.ai kèm mã giao dịch.",
       "Khi có thay đổi trọng yếu đối với Điều khoản sử dụng, chúng tôi sẽ thông báo trước ít nhất 14 ngày qua email đăng ký tài khoản.",

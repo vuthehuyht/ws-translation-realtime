@@ -69,8 +69,8 @@ async def test_get_me_returns_profile_and_wallet(async_client: AsyncClient) -> N
     assert data["defaultSourceLang"] == "vi-VN"
     assert data["defaultTargetLangs"] == ["en-US"]
     assert data["wallet"] is not None
-    assert data["wallet"]["currency"] == "USD"
-    assert float(data["wallet"]["balance"]) == 2.0
+    assert "currency" not in data["wallet"]
+    assert float(data["wallet"]["balance"]) == 200.0
 
 
 async def test_update_profile_basic_fields_and_validation(async_client: AsyncClient) -> None:

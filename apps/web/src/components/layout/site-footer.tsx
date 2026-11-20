@@ -4,8 +4,8 @@ import { AudioWaveform, Globe2, Mail, ShieldCheck } from "lucide-react";
 
 const PRODUCT_FEATURES = [
   { href: "/products/realtime-translation", label: "Phiên dịch trực tiếp" },
-  { href: "/pricing", label: "Bảng giá & Gói cước" },
-  { href: "/products/transcripts-ai-summary", label: "Biên bản & Tóm tắt AI" },
+  { href: "/pricing", label: "Bảng giá & gói cước" },
+  { href: "/products/transcripts-ai-summary", label: "Biên bản & tóm tắt AI" },
   { href: "/products/custom-vocabularies", label: "Từ điển thuật ngữ" },
 ];
 
@@ -86,7 +86,7 @@ export function SiteFooter() {
 
             <div className="col-span-2 space-y-3 sm:col-span-1">
               <p className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                Pháp lý &amp; Bảo mật
+                Pháp lý &amp; bảo mật
               </p>
               <ul className="space-y-2 text-xs text-muted-foreground">
                 <li>
@@ -107,7 +107,7 @@ export function SiteFooter() {
                 </li>
                 <li className="inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700">
                   <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
-                  <span>Mã hóa TLS &amp; Tuân thủ GDPR</span>
+                  <span>Mã hóa TLS &amp; tuân thủ GDPR</span>
                 </li>
               </ul>
             </div>

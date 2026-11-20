@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cn, formatCurrency, formatDuration } from "./utils";
+import { cn, formatCredits, formatCurrency, formatDuration } from "./utils";
 
 describe("utils module", () => {
   describe("cn", () => {
@@ -7,6 +7,19 @@ describe("utils module", () => {
       expect(cn("px-2 py-1", "bg-white")).toBe("px-2 py-1 bg-white");
       expect(cn("p-2", "p-4")).toBe("p-4");
       expect(cn("text-red-500", undefined, null, false && "text-blue-500")).toBe("text-red-500");
+    });
+  });
+
+  describe("formatCredits", () => {
+    it("formats Credits with vi-VN thousand separators", () => {
+      expect(formatCredits(200)).toBe("200 Cr");
+      expect(formatCredits(1800)).toBe("1.800 Cr");
+      expect(formatCredits(0)).toBe("0 Cr");
+    });
+
+    it("keeps at most 2 decimal places", () => {
+      expect(formatCredits(5.5)).toBe("5,5 Cr");
+      expect(formatCredits(0.126)).toBe("0,13 Cr");
     });
   });
 

@@ -56,7 +56,7 @@ class WalletRepository(BaseRepository[Wallet]):
 
         required = abs(amount_delta)
         raise PaymentRequiredException(
-            f"Insufficient funds: Current balance is ${wallet.balance}, required ${required}"
+            f"Insufficient credits: current balance is {wallet.balance} Cr, required {required} Cr"
         )
 
     async def create_transaction(self, tx: PaymentTransaction) -> PaymentTransaction:

@@ -62,13 +62,13 @@ sequenceDiagram
     Cognito-->>H: Gửi mã xác thực OTP qua Email
     H->>API: 2. Nhập OTP xác nhận tài khoản (`POST /api/v1/auth/confirm`)
     API->>Cognito: 3. Gọi ConfirmSignUp xác thực OTP
-    API->>DB: Tự động tạo Hồ sơ User + Ví điện tử (Welcome Bonus = $2.00)
-    H->>API: 4. Tạo lệnh Nạp tiền (ví dụ: Nạp $50 qua Thẻ/QR)
+    API->>DB: Tự động tạo Hồ sơ User + Ví điện tử (Welcome Bonus = 200 Cr)
+    H->>API: 4. Tạo lệnh Nạp tiền (ví dụ: Mua gói `PACK_L` $100 qua Thẻ/QR)
     API->>PG: Khởi tạo Payment Intent / Mã VietQR (tx_id)
     PG-->>H: Hiển thị trang thanh toán / Mã QR
     H->>PG: 5. Thực hiện thanh toán
     PG->>API: 6. Gọi Webhook báo thanh toán thành công (kèm chữ ký HMAC)
-    API->>DB: Kiểm tra chống trùng (Idempotency) -> Cộng $50 vào PostgreSQL & Redis
+    API->>DB: Kiểm tra chống trùng (Idempotency) -> Cộng 10.000 Cr vào PostgreSQL & Redis
     API-->>H: 7. Thông báo nạp tiền thành công tức thời trên màn hình
 ```
 

@@ -26,7 +26,6 @@ async def test_wallet_and_payment_transactions(db_session: AsyncSession) -> None
         type="TOP_UP",
         provider="STRIPE",
         amount=Decimal("20.0000"),
-        currency="USD",
         status="SUCCEEDED",
         metadata_json={"brand": "Visa", "last4": "4242"},
     )

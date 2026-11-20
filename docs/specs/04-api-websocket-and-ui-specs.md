@@ -67,7 +67,7 @@ Toàn bộ các endpoint của Host yêu cầu Header `Authorization: Bearer <Co
 | :---: | :--- | :---: | :---: | :--- |
 | `GET` | `/api/v1/health` | Public | `DONE` | Health & Liveness Check (`{"status": "ok", "service": ..., "env": ...}`). |
 | `POST` | `/api/v1/auth/register` | Public | `DONE` | Đăng ký Host (`email`, `password`, `fullName`) qua Cognito `SignUp` -> `201 Created`. Trả phản hồi đồng nhất `CONFIRMATION_REQUIRED` chống user enumeration. |
-| `POST` | `/api/v1/auth/confirm` | Public | `DONE` | Xác thực OTP 6 số (`email`, `otpCode`) -> `200 OK` (`{"status": "CONFIRMED"}`). Transaction ACID khởi tạo `users`, `user_profiles`, `wallets` (Welcome Bonus `$2.00`) và `payment_transactions`. |
+| `POST` | `/api/v1/auth/confirm` | Public | `DONE` | Xác thực OTP 6 số (`email`, `otpCode`) -> `200 OK` (`{"status": "CONFIRMED"}`). Transaction ACID khởi tạo `users`, `user_profiles`, `wallets` (Welcome Bonus `200 Cr`) và `payment_transactions`. |
 | `POST` | `/api/v1/auth/resend-otp` | Public | `DONE` | Gửi lại OTP kích hoạt (`email`) với Redis cooldown 60s (`retryAfter: 60`). |
 | `POST` | `/api/v1/auth/login` | Public | `DONE` | Đăng nhập (`email`, `password`, `rememberMe`). Trả `tokens` (`accessToken`, `idToken`, `expiresIn`, `tokenType`) + `user` trong JSON; `refreshToken` chỉ được set qua HttpOnly cookie `ws_refresh_token` (`Path=/api/v1/auth`, `SameSite=Lax`, `Cache-Control: no-store`). |
 | `POST` | `/api/v1/auth/refresh` | Cookie | `DONE` | Làm mới `accessToken` & `idToken` ngầm **chỉ nhận cookie** `ws_refresh_token` (không chấp nhận body token để bảo vệ HttpOnly). Tự động xóa cookie nếu token hết hạn/bị thu hồi. |

@@ -25,7 +25,7 @@ const DOMAIN_EXAMPLES: Record<
       "Hệ thống dùng ElastiCache và AppSync Events trên Fargate để truyền âm thanh qua VoiceBridge AI.",
   },
   medical: {
-    name: "Y khoa & Dược phẩm",
+    name: "Y khoa & dược phẩm",
     terms: ["Metformin", "Atorvastatin", "Echocardiography", "HbA1c", "MRI 3 Tesla"],
     before:
       "Bệnh nhân cần đo chỉ số hát bê a một xê và làm siêu âm tim ê cô trước khi dùng mét pho min.",
@@ -33,7 +33,7 @@ const DOMAIN_EXAMPLES: Record<
       "Bệnh nhân cần đo chỉ số HbA1c và làm siêu âm tim Echocardiography trước khi dùng Metformin.",
   },
   finance: {
-    name: "Tài chính & Ngân hàng",
+    name: "Tài chính & ngân hàng",
     terms: ["NAPAS EMVCo", "VietQR", "EBITDA", "PCI-DSS", "Off-session Charge"],
     before:
       "Cổng thanh toán tuân thủ pi xi ai đi ét ét và sinh mã việc quy rờ theo chuẩn na phát.",
@@ -117,7 +117,7 @@ export default function CustomVocabulariesProductPage() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div className="rounded-xl border border-rose-200 bg-rose-50/50 p-4">
             <p className="text-[11px] font-bold uppercase tracking-wider text-rose-700">
-              Trước khi gắn Từ điển (STT mặc định)
+              Trước khi gắn từ điển (STT mặc định)
             </p>
             <p className="mt-2 text-sm leading-relaxed text-slate-700">
               {active.before}

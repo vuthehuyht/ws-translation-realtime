@@ -44,7 +44,7 @@ describe("DeleteAccountSection", () => {
     render(
       <DeleteAccountSection
         email="host@example.com"
-        walletBalance="$2.00 USD"
+        walletBalance="200 Cr"
         onAccountDeleted={onDeleted}
       />
     );

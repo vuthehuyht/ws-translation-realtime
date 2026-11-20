@@ -10,7 +10,6 @@ class WalletSummaryResponse(BaseModel):
     """Embedded wallet balance & settings summary returned in GET /users/me."""
 
     balance: Decimal
-    currency: str = "USD"
     auto_degrade_tts: bool = Field(default=True, alias="autoDegradeTts")
     auto_topup_enabled: bool = Field(default=False, alias="autoTopupEnabled")
 

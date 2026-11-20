@@ -124,7 +124,7 @@ export function ResetPasswordForm({
     <div className={cn("w-full max-w-[440px] mx-auto space-y-6", className)}>
       <div className="space-y-1 text-left">
         <h2 className="text-2xl font-bold tracking-tight text-foreground">
-          Đặt lại Mật khẩu mới
+          Đặt lại mật khẩu mới
         </h2>
         <p className="text-sm text-muted-foreground">
           Nhập mã OTP 6 số và thiết lập mật khẩu bảo vệ mới
@@ -284,7 +284,7 @@ export function ResetPasswordForm({
           ) : (
             <>
               <Check className="h-4 w-4" />
-              <span>Lưu Mật khẩu &amp; Đăng nhập ngay</span>
+              <span>Lưu mật khẩu &amp; đăng nhập ngay</span>
             </>
           )}
         </button>

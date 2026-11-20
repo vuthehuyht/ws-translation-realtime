@@ -86,7 +86,7 @@ export function RecentRoomsList({
             Chưa có phòng dịch nào
           </h3>
           <p className="mt-1 text-xs text-muted-foreground">
-            Hãy chọn ngôn ngữ đích và bấm &quot;Tạo &amp; Mở Phòng Dịch Ngay&quot; ở
+            Hãy chọn ngôn ngữ đích và bấm &quot;Tạo &amp; mở phòng dịch ngay&quot; ở
             phía trên.
           </p>
         </div>

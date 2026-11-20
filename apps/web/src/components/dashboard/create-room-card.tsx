@@ -201,7 +201,7 @@ export function CreateRoomCard({
                   Broadcast (Hội trường / Webinar)
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  1 Host nói · Tối đa 1.000 người nghe qua QR · ~$0.15/phút
+                  1 Host nói · Tối đa 1.000 người nghe qua QR · ~15 Cr/phút
                 </p>
               </div>
             </button>
@@ -230,7 +230,7 @@ export function CreateRoomCard({
                   1-on-1 (Hội thoại 2 chiều)
                 </p>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Phiên dịch song phương 2 người · ~$0.075/phút
+                  Phiên dịch song phương 2 người · ~7,5 Cr/phút
                 </p>
               </div>
             </button>
@@ -291,7 +291,7 @@ export function CreateRoomCard({
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-700 px-5 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-all hover:opacity-95"
           >
             <Play className="h-4 w-4 fill-current" />
-            <span>Tạo & Mở Phòng Dịch Ngay</span>
+            <span>Tạo &amp; mở phòng dịch ngay</span>
           </button>
         </div>
       </form>

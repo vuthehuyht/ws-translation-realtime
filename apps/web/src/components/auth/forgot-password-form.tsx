@@ -97,7 +97,7 @@ export function ForgotPasswordForm({
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span>Quay lại Đăng nhập</span>
+          <span>Quay lại đăng nhập</span>
         </Link>
 
         <div className="space-y-1.5">
@@ -117,7 +117,7 @@ export function ForgotPasswordForm({
             htmlFor="email"
             className="block text-xs font-semibold text-foreground"
           >
-            Địa chỉ Email đã đăng ký
+            Địa chỉ email đã đăng ký
           </label>
           <input
             id="email"
@@ -159,7 +159,7 @@ export function ForgotPasswordForm({
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            "Gửi mã xác thực qua Email →"
+            "Gửi mã xác thực qua email →"
           )}
         </button>
       </form>

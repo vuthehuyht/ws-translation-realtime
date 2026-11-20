@@ -2,18 +2,27 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Plus, X } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, formatCredits } from "@/lib/utils";
 
 interface WalletCardProps {
   balance: number;
   autoTopUp: boolean;
   onToggleAutoTopUp: (nextValue: boolean) => void;
-  onTopUpConfirm: (amountUsd: number, method: "stripe" | "vietqr") => void;
+  onTopUpConfirm: (credits: number, method: "stripe" | "vietqr") => void;
   onViewBilling?: () => void;
 }
 
-const TOP_UP_PACKAGES = [5, 10, 25, 50];
+// Fixed top-up packs (PACK_S/M/L): wallet is credited in Credits, USD is only the payment price.
+const TOP_UP_PACKAGES = [
+  { code: "PACK_S", credits: 1000, priceUsd: 10 },
+  { code: "PACK_M", credits: 3000, priceUsd: 30 },
+  { code: "PACK_L", credits: 10000, priceUsd: 100 },
+] as const;
 const USD_TO_VND_RATE = 25500;
+// Broadcast burn rate (100 listeners) used for the remaining-minutes estimate.
+const BROADCAST_CREDITS_PER_MINUTE = 15;
+const LOW_BALANCE_THRESHOLD_CREDITS = 100;
+const AUTO_TOP_UP_CREDITS = 1000;
 
 export function WalletCard({
   balance,
@@ -24,7 +33,7 @@ export function WalletCard({
 }: WalletCardProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [paymentTab, setPaymentTab] = useState<"stripe" | "vietqr">("stripe");
-  const [selectedAmount, setSelectedAmount] = useState<number>(10);
+  const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const triggerButtonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -44,16 +53,18 @@ export function WalletCard({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isModalOpen]);
 
+  const selectedPack = TOP_UP_PACKAGES[selectedIndex];
+
   const closeModal = () => {
     setIsModalOpen(false);
     triggerButtonRef.current?.focus();
   };
 
-  const estimatedMinutes = Math.max(0, Math.floor(balance / 0.15));
-  const isLowBalance = balance < 1.0;
+  const estimatedMinutes = Math.max(0, Math.floor(balance / BROADCAST_CREDITS_PER_MINUTE));
+  const isLowBalance = balance < LOW_BALANCE_THRESHOLD_CREDITS;
 
   const handleConfirm = () => {
-    onTopUpConfirm(selectedAmount, paymentTab);
+    onTopUpConfirm(selectedPack.credits, paymentTab);
     closeModal();
   };
 
@@ -67,7 +78,7 @@ export function WalletCard({
                 Số dư ví khả dụng
               </span>
               <span className="rounded-md bg-white/10 px-2 py-0.5 text-[11px] font-medium text-indigo-100">
-                USD Wallet
+                Credit Wallet
               </span>
             </div>
 
@@ -76,9 +87,8 @@ export function WalletCard({
                 data-testid="wallet-balance"
                 className="text-3xl font-bold tracking-tight tabular-nums"
               >
-                ${balance.toFixed(2)}
+                {formatCredits(balance)}
               </span>
-              <span className="text-xs font-medium text-indigo-200">USD</span>
             </div>
 
             <p className="mt-1.5 text-xs text-indigo-100/90">
@@ -94,7 +104,7 @@ export function WalletCard({
               >
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                 <div>
-                  <p className="font-semibold">Số dư dưới $1.00</p>
+                  <p className="font-semibold">Số dư dưới {formatCredits(LOW_BALANCE_THRESHOLD_CREDITS)}</p>
                   <p className="mt-0.5 text-amber-700">
                     Vui lòng nạp thêm để tránh gián đoạn khi đang phát trực tiếp.
                   </p>
@@ -116,7 +126,8 @@ export function WalletCard({
               <div>
                 <p className="text-xs font-semibold text-foreground">Auto Top-up</p>
                 <p className="text-[11px] text-muted-foreground">
-                  Tự động nạp $10.00 khi số dư &lt; $1.00
+                  Tự động nạp {formatCredits(AUTO_TOP_UP_CREDITS)} khi số dư &lt;{" "}
+                  {formatCredits(LOW_BALANCE_THRESHOLD_CREDITS)}
                 </p>
               </div>
               <button
@@ -157,7 +168,7 @@ export function WalletCard({
         <div
           role="dialog"
           aria-modal="true"
-          aria-label="Nạp tiền vào Ví Host"
+          aria-label="Nạp tiền vào ví Host"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               closeModal();
@@ -168,7 +179,7 @@ export function WalletCard({
           <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-border/70 px-5 py-4">
               <h3 className="text-sm font-bold text-foreground">
-                Nạp tiền vào Ví Host
+                Nạp tiền vào ví Host
               </h3>
               <button
                 ref={closeButtonRef}
@@ -211,22 +222,25 @@ export function WalletCard({
 
               <div>
                 <p className="mb-2 text-xs font-semibold text-foreground">
-                  Chọn gói nạp (USD)
+                  Chọn gói nạp Credit
                 </p>
-                <div className="grid grid-cols-4 gap-2">
-                  {TOP_UP_PACKAGES.map((amount) => (
+                <div className="grid grid-cols-3 gap-2">
+                  {TOP_UP_PACKAGES.map((pack, index) => (
                     <button
-                      key={amount}
+                      key={pack.code}
                       type="button"
-                      onClick={() => setSelectedAmount(amount)}
+                      onClick={() => setSelectedIndex(index)}
                       className={cn(
                         "rounded-lg py-2 text-xs font-bold transition-all",
-                        selectedAmount === amount
+                        selectedIndex === index
                           ? "border-2 border-indigo-600 bg-indigo-50 text-indigo-700"
                           : "border border-border text-foreground hover:border-indigo-400"
                       )}
                     >
-                      ${amount}
+                      <span className="block">{formatCredits(pack.credits)}</span>
+                      <span className="block text-[10px] font-medium opacity-70">
+                        ${pack.priceUsd}
+                      </span>
                     </button>
                   ))}
                 </div>
@@ -238,11 +252,15 @@ export function WalletCard({
                     Thanh toán bảo mật qua Stripe Checkout
                   </p>
                   <p>
-                    Số tiền{" "}
+                    Bạn thanh toán{" "}
                     <span className="font-bold text-primary">
-                      ${selectedAmount.toFixed(2)} USD
+                      ${selectedPack.priceUsd.toFixed(2)}
                     </span>{" "}
-                    sẽ được cộng vào ví ngay sau khi xác nhận.
+                    và nhận{" "}
+                    <span className="font-bold text-primary">
+                      {formatCredits(selectedPack.credits)}
+                    </span>{" "}
+                    vào ví ngay sau khi xác nhận.
                   </p>
                 </div>
               ) : (
@@ -253,7 +271,7 @@ export function WalletCard({
                   <p className="text-xs font-semibold text-foreground">
                     Quy đổi:{" "}
                     <span className="text-primary">
-                      {(selectedAmount * USD_TO_VND_RATE).toLocaleString("en-US")}{" "}
+                      {(selectedPack.priceUsd * USD_TO_VND_RATE).toLocaleString("en-US")}{" "}
                       VND
                     </span>
                   </p>
@@ -268,7 +286,7 @@ export function WalletCard({
                 onClick={handleConfirm}
                 className="h-11 w-full rounded-lg bg-gradient-to-r from-indigo-600 to-indigo-700 text-sm font-semibold text-white shadow-md shadow-indigo-600/20 transition-all hover:opacity-95"
               >
-                Xác nhận nạp ${selectedAmount.toFixed(2)}
+                Xác nhận nạp {formatCredits(selectedPack.credits)}
               </button>
             </div>
           </div>

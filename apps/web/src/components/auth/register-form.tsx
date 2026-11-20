@@ -86,7 +86,7 @@ export function RegisterForm({
     }
 
     if (!agreeTerms) {
-      newErrors.agreeTerms = "Bạn cần đồng ý với Điều khoản Dịch vụ để tiếp tục";
+      newErrors.agreeTerms = "Bạn cần đồng ý với Điều khoản dịch vụ để tiếp tục";
     }
 
     setErrors(newErrors);
@@ -189,7 +189,7 @@ export function RegisterForm({
             htmlFor="email"
             className="block text-xs font-semibold text-foreground"
           >
-            Địa chỉ Email
+            Địa chỉ email
           </label>
           <input
             id="email"
@@ -319,13 +319,13 @@ export function RegisterForm({
             <label htmlFor="agreeTerms" className="cursor-pointer">
               Tôi đồng ý với{" "}
               <Link href="/terms" className="font-semibold text-primary underline underline-offset-2">
-                Điều khoản Dịch vụ
+                Điều khoản dịch vụ
               </Link>{" "}
               và{" "}
               <Link href="/privacy" className="font-semibold text-primary underline underline-offset-2">
-                Chính sách Bảo mật
+                Chính sách bảo mật
               </Link>{" "}
-              của WS Translation.
+              của VoiceBridge AI.
             </label>
           </div>
           {errors.agreeTerms && (

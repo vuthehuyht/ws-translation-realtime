@@ -34,7 +34,7 @@ describe("LoginPage integration flow", () => {
     expect(
       screen.getByText(/tài khoản của bạn đã được xác thực thành công/i)
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Địa chỉ Email")).toHaveValue("verified@example.com");
+    expect(screen.getByLabelText("Địa chỉ email")).toHaveValue("verified@example.com");
   });
 
   it("shows deleted account confirmation banner when deleted=1 query param is present", () => {
@@ -75,7 +75,7 @@ describe("LoginPage integration flow", () => {
 
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Địa chỉ Email"), {
+    fireEvent.change(screen.getByLabelText("Địa chỉ email"), {
       target: { value: "Host@Example.com" },
     });
     fireEvent.change(screen.getByLabelText("Mật khẩu"), {
@@ -83,7 +83,7 @@ describe("LoginPage integration flow", () => {
     });
     fireEvent.click(screen.getByLabelText("Ghi nhớ đăng nhập"));
     fireEvent.click(
-      screen.getByRole("button", { name: "Đăng nhập vào Hệ thống" })
+      screen.getByRole("button", { name: "Đăng nhập vào hệ thống" })
     );
 
     await waitFor(() => {
@@ -124,14 +124,14 @@ describe("LoginPage integration flow", () => {
 
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Địa chỉ Email"), {
+    fireEvent.change(screen.getByLabelText("Địa chỉ email"), {
       target: { value: "host@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Mật khẩu"), {
       target: { value: "WrongPass123!" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Đăng nhập vào Hệ thống" })
+      screen.getByRole("button", { name: "Đăng nhập vào hệ thống" })
     );
 
     await waitFor(() => {
@@ -157,14 +157,14 @@ describe("LoginPage integration flow", () => {
 
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Địa chỉ Email"), {
+    fireEvent.change(screen.getByLabelText("Địa chỉ email"), {
       target: { value: "suspended@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Mật khẩu"), {
       target: { value: "Password123!" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Đăng nhập vào Hệ thống" })
+      screen.getByRole("button", { name: "Đăng nhập vào hệ thống" })
     );
 
     await waitFor(() => {
@@ -203,14 +203,14 @@ describe("LoginPage integration flow", () => {
 
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Địa chỉ Email"), {
+    fireEvent.change(screen.getByLabelText("Địa chỉ email"), {
       target: { value: "session@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Mật khẩu"), {
       target: { value: "Password123!" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Đăng nhập vào Hệ thống" })
+      screen.getByRole("button", { name: "Đăng nhập vào hệ thống" })
     );
 
     await waitFor(() => {
@@ -236,14 +236,14 @@ describe("LoginPage integration flow", () => {
 
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Địa chỉ Email"), {
+    fireEvent.change(screen.getByLabelText("Địa chỉ email"), {
       target: { value: "new.host@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Mật khẩu"), {
       target: { value: "Password123!" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Đăng nhập vào Hệ thống" })
+      screen.getByRole("button", { name: "Đăng nhập vào hệ thống" })
     );
 
     await waitFor(() => {
@@ -271,14 +271,14 @@ describe("LoginPage integration flow", () => {
 
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Địa chỉ Email"), {
+    fireEvent.change(screen.getByLabelText("Địa chỉ email"), {
       target: { value: "host@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Mật khẩu"), {
       target: { value: "Password123!" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Đăng nhập vào Hệ thống" })
+      screen.getByRole("button", { name: "Đăng nhập vào hệ thống" })
     );
 
     await waitFor(() => {
@@ -293,14 +293,14 @@ describe("LoginPage integration flow", () => {
 
     render(<LoginPage />);
 
-    fireEvent.change(screen.getByLabelText("Địa chỉ Email"), {
+    fireEvent.change(screen.getByLabelText("Địa chỉ email"), {
       target: { value: "host@example.com" },
     });
     fireEvent.change(screen.getByLabelText("Mật khẩu"), {
       target: { value: "Password123!" },
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Đăng nhập vào Hệ thống" })
+      screen.getByRole("button", { name: "Đăng nhập vào hệ thống" })
     );
 
     await waitFor(() => {

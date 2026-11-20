@@ -180,7 +180,6 @@ async def test_user_repository_anonymize_user_account_scrubs_pii_and_keeps_walle
         Wallet(
             host_id=user_id,
             balance=Decimal("12.5000"),
-            currency="USD",
             auto_topup_enabled=True,
             default_payment_method_id="pm_card_123",
         )
