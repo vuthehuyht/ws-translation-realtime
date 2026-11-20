@@ -99,9 +99,15 @@ def get_wallet_service(
 
 def get_user_service(
     user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+    room_repo: Annotated[RoomRepository, Depends(get_room_repository)],
+    redis_client: Annotated[aioredis.Redis, Depends(get_redis)],
 ) -> UserService:
-    """Provide UserService instance wired with user repository."""
-    return UserService(user_repo=user_repo)
+    """Provide UserService instance wired with user/room repositories and Redis."""
+    return UserService(
+        user_repo=user_repo,
+        room_repo=room_repo,
+        redis_client=redis_client,
+    )
 
 
 # User authentication dependencies

@@ -112,6 +112,12 @@ class SecurityConfig(BaseModel):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     refresh_token_expire_days: int = 30
+    email_hash_pepper: str | None = None
+
+    @property
+    def effective_email_hash_pepper(self) -> str:
+        """Return explicit email hash pepper if configured, otherwise fall back to JWT secret."""
+        return self.email_hash_pepper or self.jwt_secret_key
 
 
 # -----------------------------------------------------------------------------
@@ -160,6 +166,7 @@ class Settings(BaseSettings):
     # Security
     jwt_secret_key: str = "default-insecure-dev-jwt-secret-key-32chars-min!"  # noqa: S105
     jwt_algorithm: str = "HS256"
+    email_hash_pepper: str | None = None
     cookie_secure: bool | None = None
 
     @model_validator(mode="after")
@@ -192,6 +199,11 @@ class Settings(BaseSettings):
 
         if self.env == "production" and self.cookie_secure is False:
             raise ValueError("cookie_secure cannot be False in production")
+
+        if self.email_hash_pepper is not None and len(self.email_hash_pepper.strip()) < 32:
+            raise ValueError(
+                "email_hash_pepper must be at least 32 characters outside local/test"
+            )
 
         return self
 
@@ -244,6 +256,7 @@ class Settings(BaseSettings):
         return SecurityConfig(
             jwt_secret_key=self.jwt_secret_key,
             jwt_algorithm=self.jwt_algorithm,
+            email_hash_pepper=self.email_hash_pepper,
         )
 
     @property

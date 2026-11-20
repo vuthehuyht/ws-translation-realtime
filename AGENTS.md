@@ -22,7 +22,7 @@ DO NOT read all specification files at once. Read ONLY the document relevant to 
 - **Frontend (`apps/web`)**: Next.js 15 (App Router, TypeScript, `output: "standalone"`), TailwindCSS, Shadcn UI, WebAudio (`AudioWorklet` + Silero VAD), AWS AppSync Events WebSocket Client.
 - **Backend (`apps/backend`)**: Python 3.12+, **FastAPI**, **Uvicorn (`uvloop` + `httptools`)**, **Pydantic v2**, package management via **`uv`**. Consolidates REST API (`/api/v1/*`), WebSocket Audio Ingest (`/ws/v1/*`), and Async Background Workers in a single unified service.
 - **Database & State**:
-  - **PostgreSQL 16 (Primary ACID Database)**: 10 relational tables (`users`, `user_profiles`, `wallets`, `payment_transactions`, `custom_vocabularies`, `promo_codes`, `promo_redemptions`, `rooms`, `room_transcripts` [metadata & S3 keys], `usage_ledger`). Handled via **SQLAlchemy 2.0 Async (`asyncpg`)** and **Alembic** migrations.
+  - **PostgreSQL 16 (Primary ACID Database)**: 11 relational tables (`users`, `user_profiles`, `deleted_account_records`, `wallets`, `payment_transactions`, `custom_vocabularies`, `promo_codes`, `promo_redemptions`, `rooms`, `room_transcripts` [metadata & S3 keys], `usage_ledger`). Handled via **SQLAlchemy 2.0 Async (`asyncpg`)** and **Alembic** migrations.
   - **ElastiCache for Redis (Single-AZ)**: 10s Audio Ring Buffer (`STREAM`), active TTS listener counter (`tts_count`), ephemeral live session transcript buffer.
   - **Amazon S3**: Permanent transcript package storage (`master.json`, `.txt`, `.srt`, `.vtt`, `.csv`), AI summaries (`summary.json`), and 24h TTS audio chunks (`.mp3`).
 - **AWS AI & Fan-out Pipeline**: Amazon Transcribe Streaming (STT) -> Amazon Translate (MT) -> Multi-Provider Neural TTS (Amazon Polly primary + Azure AI Speech Neural `southeastasia` via `httpx.AsyncClient` for `vi-VN`, `th-TH`, `id-ID`) -> S3/CloudFront + AWS AppSync Events (Fan-out up to 1,000 listeners/room). On-demand meeting summaries use **Amazon Bedrock** (`Claude 3.5 Haiku` / `Nova Lite`).
@@ -46,7 +46,7 @@ ws-translation-realtime/
 │       │   ├── main.py               # Entrypoint (/api/v1, /ws/v1, Lifespan background tasks)
 │       │   ├── api/                  # Routes (auth, rooms, wallets, transcripts, health) & deps.py
 │       │   ├── core/                 # config.py, db.py (async engine), security.py, exceptions.py
-│       │   ├── models/               # SQLAlchemy 2.0 ORM Models (9 PostgreSQL tables)
+│       │   ├── models/               # SQLAlchemy 2.0 ORM Models (11 PostgreSQL tables)
 │       │   ├── schemas/              # Pydantic v2 Models & Binary Audio protocol
 │       │   ├── services/             # Business Logic (auth, rooms, billing, transcripts)
 │       │   ├── integrations/         # AWS Clients (Cognito, S3, Transcribe, Translate, Polly, Bedrock, AppSync)
@@ -96,6 +96,9 @@ ws-translation-realtime/
     - `tests/api/test_<router>.py`: 1 file per router module (e.g., `test_auth.py`, `test_health.py`). Never create per-endpoint files like `test_auth_<action>.py`.
     - `tests/unit/<layer>/test_<module>.py`: 1 file per module under `core/`, `integrations/`, `models/`, `repositories/`, `schemas/`, `services/`. Never mix unit tests for `integrations/` or `services/` into `tests/api/`.
   - **Frontend (`apps/web/src/`)**: Co-locate tests next to the source file (`<name>.test.tsx` beside `<name>.tsx`, `<name>.test.ts` beside `<name>.ts`); keep multi-screen flow tests in `<domain>-flow.test.tsx`.
+- **Mandatory Per-File Test Coverage (Strict)**:
+  - Whenever ANY source file is created or modified (backend: `api/`, `core/`, `integrations/`, `models/`, `repositories/`, `schemas/`, `services/`, `ws/`, `workers/`; frontend: `app/`, `components/`, `lib/`, `worklets/`), you MUST add or update corresponding tests in its mirrored/co-located test file covering the added or changed behavior.
+  - Never rely solely on high-level API/flow tests to skip unit tests for lower layers (`repositories/`, `services/`, `integrations/`, `models/`, `schemas/`, `core/`, `lib/`).
 
 ---
 

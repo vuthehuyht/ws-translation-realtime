@@ -36,6 +36,16 @@ class RoomRepository(BaseRepository[Room]):
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def has_active_rooms(self, host_id: str) -> bool:
+        """Return True if the host currently owns at least one ACTIVE or PAUSED room."""
+        stmt = (
+            select(Room.id)
+            .where(Room.host_id == host_id, Room.status.in_(("ACTIVE", "PAUSED")))
+            .limit(1)
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none() is not None
+
     async def update_status(
         self,
         room_id: str,

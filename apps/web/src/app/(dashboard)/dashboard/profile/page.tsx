@@ -2,16 +2,20 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, RefreshCw, Wallet } from "lucide-react";
 import { AvatarUploader } from "@/components/profile/avatar-uploader";
 import { BillingInfoForm } from "@/components/profile/billing-info-form";
 import { ChangePasswordForm } from "@/components/profile/change-password-form";
+import { DeleteAccountSection } from "@/components/profile/delete-account-section";
 import { ProfileBasicForm } from "@/components/profile/profile-basic-form";
 import { ApiError } from "@/lib/api-client";
-import { patchAuthSessionUser } from "@/lib/auth-refresh";
+import { cancelPendingRefreshes, patchAuthSessionUser } from "@/lib/auth-refresh";
+import { clearAuthSession } from "@/lib/auth-storage";
 import { type UserMe, getMe } from "@/lib/user-api";
 
 export default function ProfilePage() {
+  const router = useRouter();
   const [user, setUser] = useState<UserMe | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -145,6 +149,19 @@ export default function ProfilePage() {
           <ProfileBasicForm user={user} onUpdated={handleUserUpdated} />
           <BillingInfoForm user={user} onUpdated={handleUserUpdated} />
           <ChangePasswordForm />
+          <DeleteAccountSection
+            email={user.email}
+            walletBalance={
+              formattedBalance && user.wallet
+                ? `${formattedBalance} ${user.wallet.currency}`
+                : null
+            }
+            onAccountDeleted={() => {
+              cancelPendingRefreshes();
+              clearAuthSession();
+              router.replace("/login?deleted=1");
+            }}
+          />
         </div>
       )}
     </div>

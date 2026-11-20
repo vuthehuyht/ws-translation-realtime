@@ -29,7 +29,7 @@ from app.core.exceptions import (
 from app.integrations.cognito import CognitoClient, get_cognito_client
 from app.models.user import User, UserProfile
 from app.models.wallet import PaymentTransaction, Wallet
-from app.repositories.user_repository import UserRepository
+from app.repositories.user_repository import UserRepository, hash_email
 from app.repositories.wallet_repository import WalletRepository
 from app.schemas.requests import (
     ConfirmRequest,
@@ -93,12 +93,36 @@ class AuthService:
         self.redis = redis_client
 
     async def register(self, request: RegisterRequest) -> RegisterResponse:
-        """Register a new user in Cognito and reject duplicate accounts with 409 Conflict."""
+        """Register a new user in Cognito and reject duplicate or cooldown-locked emails."""
         normalized_email = request.email.strip().lower()
 
         existing_user = await self.user_repo.get_by_email(normalized_email)
         if existing_user and existing_user.status == "ACTIVE":
             raise ConflictException("An account with this email already exists")
+
+        deleted_record = await self.user_repo.get_deleted_account_by_email_hash(
+            hash_email(normalized_email)
+        )
+        if deleted_record is not None:
+            now = datetime.now(UTC)
+            re_register_at = (
+                deleted_record.re_register_allowed_at.replace(tzinfo=UTC)
+                if deleted_record.re_register_allowed_at.tzinfo is None
+                else deleted_record.re_register_allowed_at
+            )
+            if now < re_register_at:
+                retry_after_seconds = max(1, math.ceil((re_register_at - now).total_seconds()))
+                raise ForbiddenException(
+                    message=(
+                        "This email was recently deleted and cannot be re-registered "
+                        "for 7 days."
+                    ),
+                    error_code="ACCOUNT_RE_REGISTRATION_COOLDOWN",
+                    details={
+                        "reRegisterAllowedAt": re_register_at.isoformat(),
+                        "retryAfterSeconds": retry_after_seconds,
+                    },
+                )
 
         await self.cognito.sign_up(
             email=normalized_email,
@@ -157,13 +181,21 @@ class AuthService:
             user.status = "ACTIVE"
             await self.user_repo.update(user)
 
+        # Re-registered emails that previously deleted their account do not receive
+        # new-account welcome benefits (welcome credit bonus).
+        prior_deleted_record = await self.user_repo.get_deleted_account_by_email_hash(
+            hash_email(normalized_email)
+        )
+        eligible_for_welcome_bonus = prior_deleted_record is None
+        initial_balance = WELCOME_BONUS_AMOUNT if eligible_for_welcome_bonus else Decimal("0.0000")
+
         wallet = await self.wallet_repo.get_by_host_id(user_sub)
         if not wallet:
             try:
                 async with session.begin_nested():
                     wallet = Wallet(
                         host_id=user_sub,
-                        balance=WELCOME_BONUS_AMOUNT,
+                        balance=initial_balance,
                         currency="USD",
                         auto_degrade_tts=True,
                         auto_topup_enabled=False,
@@ -174,25 +206,26 @@ class AuthService:
 
         assert wallet is not None  # Guaranteed after insert or concurrent lookup
 
-        welcome_tx_id = f"welcome_{user_sub}"
-        existing_tx = await self.wallet_repo.get_transaction_by_provider_id(welcome_tx_id)
-        if not existing_tx:
-            try:
-                async with session.begin_nested():
-                    welcome_tx = PaymentTransaction(
-                        host_id=user_sub,
-                        transaction_id=welcome_tx_id,
-                        type="PROMO_CREDIT",
-                        provider="SYSTEM",
-                        amount=WELCOME_BONUS_AMOUNT,
-                        currency="USD",
-                        status="SUCCEEDED",
-                        metadata_json={"reason": "welcome_bonus"},
-                        completed_at=datetime.now(UTC),
-                    )
-                    await self.wallet_repo.create_transaction(welcome_tx)
-            except IntegrityError:
-                pass
+        if eligible_for_welcome_bonus:
+            welcome_tx_id = f"welcome_{user_sub}"
+            existing_tx = await self.wallet_repo.get_transaction_by_provider_id(welcome_tx_id)
+            if not existing_tx:
+                try:
+                    async with session.begin_nested():
+                        welcome_tx = PaymentTransaction(
+                            host_id=user_sub,
+                            transaction_id=welcome_tx_id,
+                            type="PROMO_CREDIT",
+                            provider="SYSTEM",
+                            amount=WELCOME_BONUS_AMOUNT,
+                            currency="USD",
+                            status="SUCCEEDED",
+                            metadata_json={"reason": "welcome_bonus"},
+                            completed_at=datetime.now(UTC),
+                        )
+                        await self.wallet_repo.create_transaction(welcome_tx)
+                except IntegrityError:
+                    pass
 
         return ConfirmResponse(
             status=result.get("status", "CONFIRMED"),

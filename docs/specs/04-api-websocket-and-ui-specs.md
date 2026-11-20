@@ -74,9 +74,14 @@ Toàn bộ các endpoint của Host yêu cầu Header `Authorization: Bearer <Co
 | `POST` | `/api/v1/auth/logout` | Host | `DONE` | Đăng xuất (`204 No Content`), hỗ trợ `{"globalSignOut": true/false}` -> Cognito `RevokeToken`/`GlobalSignOut` + ghi Redis Token Blocklist + xóa auth cookies. |
 | `POST` | `/api/v1/auth/forgot-password` | Public | `DONE` | Gửi OTP đặt lại mật khẩu (`email`) với Redis rate limit 3 lần/15 phút, phản hồi đồng nhất chống enumeration. |
 | `POST` | `/api/v1/auth/reset-password` | Public | `DONE` | Xác nhận OTP + mật khẩu mới (`email`, `otpCode`, `newPassword`), giới hạn 5 lần sai OTP, tự động `GlobalSignOut` thu hồi toàn bộ phiên cũ và xóa cookies. |
-| `GET` | `/api/v1/users/me` | Host | `TODO` | Lấy thông tin hồ sơ Host + Gói hiện tại (`entitlements`) + Số dư Credit 3 ngăn (`promo`, `plan`, `topup`, `total`). |
-| `PATCH` | `/api/v1/users/me` | Host | `TODO` | Cập nhật `fullName`, `avatarUrl`, `defaultSourceLang`, `billingCompanyInfo`. |
-| `DELETE` | `/api/v1/users/me` | Host | `TODO` | **Xóa tài khoản & dữ liệu cá nhân (`FR-107`, GDPR/PDPA)**: Xóa Cognito user, thu hồi mọi phiên và ẩn danh dữ liệu cá nhân. |
+| `GET` | `/api/v1/users/me` | Host | `DONE` | Lấy thông tin hồ sơ Host, preferences, VAT & số dư ví *(mở rộng `entitlements` + 3 ngăn Credit sau `EP03-S0`)*. |
+| `PATCH` | `/api/v1/users/me/profile` | Host | `DONE` | Cập nhật `fullName`, `phoneNumber` (E.164), `timezone`, `bio`. |
+| `PATCH` | `/api/v1/users/me/preferences` | Host | `DONE` | Cập nhật `defaultSourceLang`, `defaultTargetLangs`, `preferences` JSON. |
+| `PUT` | `/api/v1/users/me/billing-info` | Host | `DONE` | Cập nhật `companyName`, `taxCode` (10/13 số), `companyAddress` xuất hóa đơn VAT. |
+| `POST` | `/api/v1/users/me/avatar/upload-url` | Host | `DONE` | Sinh S3 Presigned PUT URL tải ảnh đại diện (`<= 2MB`, JPEG/PNG/WebP). |
+| `POST` | `/api/v1/users/me/avatar/confirm` | Host | `DONE` | Xác nhận object S3 (`head_object`, chống IDOR) và lưu CloudFront CDN URL. |
+| `POST` | `/api/v1/users/me/change-password` | Host | `DONE` | Đổi mật khẩu qua Amazon Cognito `ChangePassword`. |
+| `DELETE` | `/api/v1/users/me` | Host | `DONE` | **Xóa tài khoản & dữ liệu cá nhân (`FR-107`, GDPR/PDPA)**: Yêu cầu `{"confirmation": "DELETE"}`, chặn `409` nếu còn phòng `ACTIVE`, xóa Cognito user, thu hồi toàn bộ phiên Redis, ẩn danh PII (giữ sổ cái kế toán), xóa avatar S3, lưu `deleted_account_records` (cooldown 7 ngày mới đăng ký lại được & không cấp quyền lợi tài khoản mới). |
 
 ### 2.2. Phân hệ Quản lý Phòng & Tham gia (`Rooms & Sessions`)
 

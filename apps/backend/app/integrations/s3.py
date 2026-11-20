@@ -44,6 +44,10 @@ class S3Client:
     ) -> str:
         raise NotImplementedError
 
+    async def delete_prefix(self, prefix: str) -> int:
+        """Delete all objects stored under the given key prefix and return count deleted."""
+        raise NotImplementedError
+
     def build_cdn_url(self, s3_key: str) -> str:
         """Build the public CDN URL for an uploaded S3 object key."""
         settings = get_settings()
@@ -91,6 +95,16 @@ class MockS3Client(S3Client):
         self.content_types[s3_key] = content_type
         logger.info("Mock S3 uploaded %d bytes to %s", len(data), s3_key)
         return self.build_cdn_url(s3_key)
+
+    async def delete_prefix(self, prefix: str) -> int:
+        if not prefix or not prefix.strip("/"):
+            raise ValueError("S3 delete prefix must be non-empty")
+        matching_keys = [key for key in self.storage if key.startswith(prefix)]
+        for key in matching_keys:
+            self.storage.pop(key, None)
+            self.content_types.pop(key, None)
+        logger.info("Mock S3 deleted %d object(s) under prefix %s", len(matching_keys), prefix)
+        return len(matching_keys)
 
 
 class AwsS3Client(S3Client):
@@ -214,6 +228,50 @@ class AwsS3Client(S3Client):
                 logger.error("S3 put_object failed for %s: %s", s3_key, e)
                 raise BadGatewayException("Storage service error") from e
         return self.build_cdn_url(s3_key)
+
+    async def delete_prefix(self, prefix: str) -> int:
+        if not prefix or not prefix.strip("/"):
+            raise ValueError("S3 delete prefix must be non-empty")
+        deleted_count = 0
+        continuation_token: str | None = None
+        async with self.session.client(
+            "s3",
+            region_name=self.region,
+            endpoint_url=self.endpoint_url,
+            config=self._boto_config,
+        ) as client:
+            try:
+                while True:
+                    list_kwargs: dict[str, Any] = {
+                        "Bucket": self.bucket_name,
+                        "Prefix": prefix,
+                    }
+                    if continuation_token:
+                        list_kwargs["ContinuationToken"] = continuation_token
+                    response = await client.list_objects_v2(**list_kwargs)
+                    contents = response.get("Contents", [])
+                    if contents:
+                        objects_to_delete = [{"Key": obj["Key"]} for obj in contents]
+                        delete_resp = await client.delete_objects(
+                            Bucket=self.bucket_name,
+                            Delete={"Objects": objects_to_delete, "Quiet": True},
+                        )
+                        errors = (delete_resp or {}).get("Errors", [])
+                        if errors:
+                            logger.warning(
+                                "S3 delete_objects reported %d error(s) under prefix %s: %s",
+                                len(errors),
+                                prefix,
+                                errors,
+                            )
+                        deleted_count += max(0, len(objects_to_delete) - len(errors))
+                    continuation_token = response.get("NextContinuationToken")
+                    if not response.get("IsTruncated") or not continuation_token:
+                        break
+            except ClientError as e:
+                logger.error("S3 delete_prefix failed for %s: %s", prefix, e)
+                raise BadGatewayException("Storage service error") from e
+        return deleted_count
 
 
 _s3_instance: S3Client | None = None

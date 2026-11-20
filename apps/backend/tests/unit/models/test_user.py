@@ -1,12 +1,14 @@
 """Unit tests for User and UserProfile ORM models (app.models.user)."""
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.user import User, UserProfile
+from app.models.user import DeletedAccountRecord, User, UserProfile
 
 
 async def test_create_user_and_profile_relationship(db_session: AsyncSession) -> None:
@@ -60,6 +62,31 @@ async def test_duplicate_email_violates_unique_constraint(db_session: AsyncSessi
     await db_session.flush()
 
     db_session.add(user2)
+    with pytest.raises(IntegrityError):
+        await db_session.flush()
+    await db_session.rollback()
+
+
+async def test_deleted_account_record_unique_email_hash_constraint(
+    db_session: AsyncSession,
+) -> None:
+    now = datetime.now(UTC)
+    email_hash = "a" * 64
+    rec1 = DeletedAccountRecord(
+        email_hash=email_hash,
+        deleted_at=now,
+        re_register_allowed_at=now + timedelta(days=7),
+    )
+    rec2 = DeletedAccountRecord(
+        email_hash=email_hash,
+        deleted_at=now,
+        re_register_allowed_at=now + timedelta(days=7),
+    )
+    db_session.add(rec1)
+    await db_session.flush()
+    assert rec1.deletion_count == 1
+
+    db_session.add(rec2)
     with pytest.raises(IntegrityError):
         await db_session.flush()
     await db_session.rollback()

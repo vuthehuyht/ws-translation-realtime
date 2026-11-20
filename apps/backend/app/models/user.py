@@ -1,12 +1,13 @@
-"""User and UserProfile SQLAlchemy 2.0 ORM Models.
+"""User, UserProfile, and DeletedAccountRecord SQLAlchemy 2.0 ORM Models.
 
-Maps to PostgreSQL tables 'users' and 'user_profiles'.
+Maps to PostgreSQL tables 'users', 'user_profiles', and 'deleted_account_records'.
 """
 
 import uuid
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, ForeignKey, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -114,3 +115,31 @@ class UserProfile(Base, TimestampMixin):
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="profile", lazy="raise")
+
+
+class DeletedAccountRecord(Base):
+    """Privacy-preserving record of deleted accounts for re-registration cooldown and bonus gating.
+
+    Stores only the server-peppered HMAC-SHA256 digest of the normalized lowercase email (never
+    plaintext PII or a link back to anonymized user rows) so the system can enforce the 7-day
+    re-registration cooldown and withhold new-account welcome benefits under GDPR/PDPA.
+    """
+
+    __tablename__ = "deleted_account_records"
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        PG_UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    email_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    deleted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        nullable=False,
+    )
+    re_register_allowed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+    deletion_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)

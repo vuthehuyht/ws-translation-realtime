@@ -78,3 +78,59 @@ async def test_room_repository_lifecycle_and_ledger(db_session: AsyncSession) ->
     ledgers = await repo.list_usage_ledgers(room_id)
     assert len(ledgers) == 1
     assert ledgers[0].total_cost == Decimal("0.004000")
+
+
+async def test_room_repository_has_active_rooms(db_session: AsyncSession) -> None:
+    repo = RoomRepository(session=db_session)
+    host_a = "host-active-check-a"
+    host_b = "host-active-check-b"
+    db_session.add_all(
+        [
+            User(id=host_a, email="hosta@example.com"),
+            User(id=host_b, email="hostb@example.com"),
+        ]
+    )
+    await db_session.flush()
+
+    assert await repo.has_active_rooms(host_a) is False
+
+    # Non-active rooms do not trigger active-room guard
+    await repo.create(
+        Room(
+            id="room-idle-a",
+            host_id=host_a,
+            title="Idle Lobby",
+            status="IDLE",
+            host_token_hash="hash-1",
+        )
+    )
+    await repo.create(
+        Room(
+            id="room-closed-a",
+            host_id=host_a,
+            title="Ended Room",
+            status="CLOSED",
+            host_token_hash="hash-2",
+        )
+    )
+    assert await repo.has_active_rooms(host_a) is False
+
+    # Adding an ACTIVE room flips only host_a to True
+    await repo.create(
+        Room(
+            id="room-live-a",
+            host_id=host_a,
+            title="Live Room",
+            status="ACTIVE",
+            host_token_hash="hash-3",
+        )
+    )
+    assert await repo.has_active_rooms(host_a) is True
+    assert await repo.has_active_rooms(host_b) is False
+
+    # Closing the active room clears the guard; PAUSED rooms still block deletion
+    await repo.update_status("room-live-a", status="PAUSED")
+    assert await repo.has_active_rooms(host_a) is True
+
+    await repo.update_status("room-live-a", status="CLOSED", ended_at=datetime.now(UTC))
+    assert await repo.has_active_rooms(host_a) is False

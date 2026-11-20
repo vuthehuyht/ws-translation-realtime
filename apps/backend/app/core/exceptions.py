@@ -74,11 +74,16 @@ class UnauthorizedException(AppException):
 class ForbiddenException(AppException):
     """Operation forbidden or insufficient permissions (HTTP 403)."""
 
-    def __init__(self, message: str = "Forbidden", details: dict[str, Any] | None = None) -> None:
+    def __init__(
+        self,
+        message: str = "Forbidden",
+        details: dict[str, Any] | None = None,
+        error_code: str = "FORBIDDEN",
+    ) -> None:
         super().__init__(
             message=message,
             status_code=status.HTTP_403_FORBIDDEN,
-            error_code="FORBIDDEN",
+            error_code=error_code,
             details=details,
         )
 

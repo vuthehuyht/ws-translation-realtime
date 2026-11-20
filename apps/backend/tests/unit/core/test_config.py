@@ -117,3 +117,25 @@ def test_non_local_settings_reject_insecure_defaults() -> None:
     ):
         with pytest.raises(ValidationError, match="cookie_secure"):
             Settings()
+
+    with mock.patch.dict(
+        os.environ,
+        {**valid_base, "EMAIL_HASH_PEPPER": "too-short"},
+        clear=False,
+    ):
+        with pytest.raises(ValidationError, match="email_hash_pepper"):
+            Settings()
+
+    with mock.patch.dict(
+        os.environ,
+        {
+            **valid_base,
+            "EMAIL_HASH_PEPPER": "explicit-prod-email-hash-pepper-at-least-32-chars!!",
+        },
+        clear=False,
+    ):
+        prod_settings = Settings()
+        assert (
+            prod_settings.security.effective_email_hash_pepper
+            == "explicit-prod-email-hash-pepper-at-least-32-chars!!"
+        )

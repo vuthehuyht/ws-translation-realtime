@@ -38,6 +38,15 @@ async def trigger_forbidden() -> None:
     raise ForbiddenException("Account suspended")
 
 
+@dummy_router.get("/forbidden-custom-code")
+async def trigger_forbidden_custom_code() -> None:
+    raise ForbiddenException(
+        "Cooldown active",
+        error_code="ACCOUNT_RE_REGISTRATION_COOLDOWN",
+        details={"retryAfterSeconds": 604800},
+    )
+
+
 @dummy_router.get("/payment-required")
 async def trigger_payment_required() -> None:
     raise PaymentRequiredException("Wallet balance depleted")
@@ -85,6 +94,14 @@ async def test_forbidden_exception_response(async_client: AsyncClient) -> None:
     assert response.status_code == 403
     payload = response.json()
     assert payload["error"]["code"] == "FORBIDDEN"
+
+
+async def test_forbidden_exception_custom_error_code_response(async_client: AsyncClient) -> None:
+    response = await async_client.get("/test-exceptions/forbidden-custom-code")
+    assert response.status_code == 403
+    payload = response.json()
+    assert payload["error"]["code"] == "ACCOUNT_RE_REGISTRATION_COOLDOWN"
+    assert payload["error"]["details"] == {"retryAfterSeconds": 604800}
 
 
 async def test_payment_required_exception_response(async_client: AsyncClient) -> None:

@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, Response, status
 
+from app.api.cookies import clear_refresh_cookies, set_no_store_headers
 from app.api.deps import (
     AccessTokenContext,
     get_access_token_context,
@@ -18,6 +19,7 @@ from app.schemas.requests.user import (
     AvatarConfirmRequest,
     AvatarUploadUrlRequest,
     ChangePasswordRequest,
+    DeleteAccountRequest,
     UpdateBillingInfoRequest,
     UpdatePreferencesRequest,
     UpdateProfileRequest,
@@ -162,3 +164,26 @@ async def change_password(
 ) -> ChangePasswordResponse:
     """Change the active user's password via Amazon Cognito ChangePassword."""
     return await user_service.change_password(token_context.token, payload)
+
+
+@router.delete(
+    "/me",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Permanently delete account and anonymize personal data (GDPR/PDPA)",
+)
+async def delete_me(
+    payload: DeleteAccountRequest,
+    response: Response,
+    current_user: Annotated[User, Depends(get_current_user)],
+    token_context: Annotated[AccessTokenContext, Depends(get_access_token_context)],
+    user_service: Annotated[UserService, Depends(get_user_service)],
+) -> None:
+    """Delete Cognito identity, revoke all sessions, anonymize PII, and clear auth cookies."""
+    _ = payload
+    await user_service.delete_account(
+        user_id=current_user.id,
+        access_token=token_context.token,
+        expires_at=token_context.expires_at,
+    )
+    set_no_store_headers(response)
+    clear_refresh_cookies(response)

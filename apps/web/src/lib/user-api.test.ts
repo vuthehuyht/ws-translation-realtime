@@ -3,6 +3,7 @@ import { saveAuthSession } from "./auth-storage";
 import {
   changePassword,
   confirmAvatarUpload,
+  deleteAccount,
   getMe,
   requestAvatarUploadUrl,
   updateBillingInfo,
@@ -145,5 +146,20 @@ describe("user-api", () => {
       "https://cdn.example.com/avatars/user-1/a.png"
     );
     expect(fetchSpy).toHaveBeenCalledTimes(3);
+  });
+
+  it("calls DELETE /api/v1/users/me with confirmation payload", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await deleteAccount({ confirmation: "DELETE" });
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(String(url)).toContain("/api/v1/users/me");
+    expect(init?.method).toBe("DELETE");
+    expect(init?.credentials).toBe("include");
+    expect(init?.body).toBe(JSON.stringify({ confirmation: "DELETE" }));
   });
 });

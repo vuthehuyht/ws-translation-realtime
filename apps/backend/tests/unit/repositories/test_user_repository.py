@@ -1,5 +1,7 @@
 """Unit tests for UserRepository (app.repositories.user_repository)."""
 
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any
 
 import pytest
@@ -8,7 +10,8 @@ from sqlalchemy.exc import InvalidRequestError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User, UserProfile
-from app.repositories.user_repository import UserRepository
+from app.models.wallet import Wallet
+from app.repositories.user_repository import UserRepository, hash_email
 
 
 async def test_user_repository_create_and_find_by_email(db_session: AsyncSession) -> None:
@@ -106,3 +109,102 @@ async def test_user_repository_avoids_unnecessary_relationship_queries(
             _ = user_with_profile.wallet
     finally:
         event.remove(sync_engine, "before_cursor_execute", _record_sql)
+
+
+def test_hash_email_normalizes_case_and_whitespace() -> None:
+    import hashlib
+
+    digest = hash_email("User.Name@Example.COM")
+    assert len(digest) == 64
+    assert digest == hash_email("  user.name@example.com  ")
+    assert digest != hash_email("other@example.com")
+    # Must be peppered HMAC-SHA256, never plain unsalted SHA-256
+    assert digest != hashlib.sha256(b"user.name@example.com").hexdigest()
+
+
+async def test_user_repository_deleted_account_record_upsert_and_lookup(
+    db_session: AsyncSession,
+) -> None:
+    repo = UserRepository(session=db_session)
+    email_hash = hash_email("deleted.repo@example.com")
+
+    assert await repo.get_deleted_account_by_email_hash(email_hash) is None
+
+    first_deleted_at = datetime.now(UTC) - timedelta(days=10)
+    first_allowed_at = first_deleted_at + timedelta(days=7)
+    created = await repo.upsert_deleted_account_record(
+        email_hash=email_hash,
+        deleted_at=first_deleted_at,
+        re_register_allowed_at=first_allowed_at,
+    )
+    assert created.email_hash == email_hash
+    assert created.deletion_count == 1
+
+    # Second deletion for the same email hash updates in place and increments deletion_count
+    second_deleted_at = datetime.now(UTC)
+    second_allowed_at = second_deleted_at + timedelta(days=7)
+    updated = await repo.upsert_deleted_account_record(
+        email_hash=email_hash,
+        deleted_at=second_deleted_at,
+        re_register_allowed_at=second_allowed_at,
+    )
+    assert updated.id == created.id
+    assert updated.deletion_count == 2
+
+    fetched = await repo.get_deleted_account_by_email_hash(email_hash)
+    assert fetched is not None
+    assert fetched.deletion_count == 2
+
+
+async def test_user_repository_anonymize_user_account_scrubs_pii_and_keeps_wallet(
+    db_session: AsyncSession,
+) -> None:
+    repo = UserRepository(session=db_session)
+    user_id = "cognito-sub-anonymize-1"
+
+    user = User(id=user_id, email="pii.host@example.com", role="HOST", status="ACTIVE")
+    profile = UserProfile(
+        user_id=user_id,
+        full_name="Sensitive Name",
+        phone_number="+84901234567",
+        bio="Personal bio",
+        avatar_url="https://cdn.example.com/avatars/1.png",
+        company_name="Private Co",
+        tax_code="0101234567",
+        company_address="123 Secret St",
+        stripe_customer_id="cus_12345",
+        preferences={"vadSensitivity": "high"},
+    )
+    await repo.create_user_with_profile(user, profile)
+    db_session.add(
+        Wallet(
+            host_id=user_id,
+            balance=Decimal("12.5000"),
+            currency="USD",
+            auto_topup_enabled=True,
+            default_payment_method_id="pm_card_123",
+        )
+    )
+    await db_session.flush()
+
+    assert await repo.anonymize_user_account("non-existent-id") is False
+    assert await repo.anonymize_user_account(user_id) is True
+
+    db_session.expire_all()
+    anonymized = await repo.get_by_id(user_id, include_profile=True, include_wallet=True)
+    assert anonymized is not None
+    assert anonymized.status == "DELETED"
+    assert anonymized.email == f"deleted_{user_id}@anonymized.invalid"
+    assert anonymized.profile.full_name == "Deleted User"
+    assert anonymized.profile.phone_number is None
+    assert anonymized.profile.bio is None
+    assert anonymized.profile.avatar_url is None
+    assert anonymized.profile.company_name is None
+    assert anonymized.profile.tax_code is None
+    assert anonymized.profile.company_address is None
+    assert anonymized.profile.stripe_customer_id is None
+    assert anonymized.profile.preferences == {}
+    assert anonymized.wallet.auto_topup_enabled is False
+    assert anonymized.wallet.default_payment_method_id is None
+    # Balance stays intact for accounting audit trail
+    assert anonymized.wallet.balance == Decimal("12.5000")
