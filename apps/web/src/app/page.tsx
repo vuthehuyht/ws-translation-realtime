@@ -28,21 +28,21 @@ const CAPABILITIES = [
     href: "/products/realtime-translation",
     icon: Radio,
     badge: "Phiên dịch trực tiếp",
-    title: "Hội thoại 1-on-1 & Hội thảo 1.000 người",
-    desc: "Dịch song song 10 ngôn ngữ với Amazon Transcribe, Translate, Polly Neural và giọng Tiếng Việt Azure Neural.",
+    title: "Hội thoại 1-on-1 & hội thảo 1.000 người",
+    desc: "Dịch song song 10 ngôn ngữ với Amazon Transcribe, Translate, Polly Neural và giọng tiếng Việt Azure Neural.",
   },
   {
     href: "/pricing",
     icon: Coins,
-    badge: "Bảng giá & Gói cước",
-    title: "4 Gói cố định, trừ Credit theo từng giây",
+    badge: "Bảng giá & gói cước",
+    title: "4 gói cố định, trừ Credit theo từng giây",
     desc: "Quy đổi minh bạch 1 USD = 100 Credits, trừ theo thứ tự Promo -> Gói tháng -> Top-up không hết hạn.",
   },
   {
     href: "/products/transcripts-ai-summary",
     icon: FileText,
-    badge: "Biên bản & Tóm tắt AI",
-    title: "Xuất phụ đề đa định dạng & Tóm tắt thông minh",
+    badge: "Biên bản & tóm tắt AI",
+    title: "Xuất phụ đề đa định dạng & tóm tắt thông minh",
     desc: "Tự động đóng gói .TXT, .SRT, .VTT, .CSV lên S3 và tạo bản tóm tắt đa ngôn ngữ kèm mốc thời gian.",
   },
   {
@@ -70,7 +70,7 @@ const HOW_IT_WORKS = [
   {
     step: "03",
     icon: Sparkles,
-    title: "Dịch trực tiếp & Tóm tắt AI",
+    title: "Dịch trực tiếp & tóm tắt AI",
     desc: "Phụ đề chạy mượt < 500ms; kết thúc phòng tự động xuất biên bản S3 và tạo bản tóm tắt AI đa ngôn ngữ.",
   },
 ];
@@ -344,7 +344,7 @@ export default function HomePage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <span className="text-xs font-bold uppercase tracking-wider text-indigo-600">
-                  Bảng giá cố định &amp; Ví Credit
+                  Bảng giá cố định &amp; ví Credit
                 </span>
                 <h2 className="mt-1 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
                   Chọn gói phù hợp, nạp thêm không lo hết hạn
@@ -354,7 +354,7 @@ export default function HomePage() {
                 href="/pricing"
                 className="inline-flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:underline"
               >
-                <span>Xem bảng so sánh đầy đủ &amp; Ước tính chi phí</span>
+                <span>Xem bảng so sánh đầy đủ &amp; ước tính chi phí</span>
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </div>

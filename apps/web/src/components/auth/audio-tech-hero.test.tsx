@@ -10,7 +10,7 @@ describe("AudioTechHero component", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("< 500ms")).toBeInTheDocument();
     expect(screen.getByText("1,000+")).toBeInTheDocument();
-    expect(screen.getByText("$0 Idle")).toBeInTheDocument();
+    expect(screen.getByText("0 Cr Idle")).toBeInTheDocument();
   });
 
   it("renders audio stream simulation with VAD badge and speech chips", () => {

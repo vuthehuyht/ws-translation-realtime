@@ -13,6 +13,7 @@ import { ApiError } from "@/lib/api-client";
 import { cancelPendingRefreshes, patchAuthSessionUser } from "@/lib/auth-refresh";
 import { clearAuthSession } from "@/lib/auth-storage";
 import { type UserMe, getMe } from "@/lib/user-api";
+import { formatCredits } from "@/lib/utils";
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -65,7 +66,7 @@ export default function ProfilePage() {
   };
 
   const formattedBalance = user?.wallet
-    ? `$${Number(user.wallet.balance).toFixed(2)}`
+    ? formatCredits(Number(user.wallet.balance))
     : null;
 
   return (
@@ -96,10 +97,7 @@ export default function ProfilePage() {
                 Số dư ví hiện tại
               </p>
               <p className="text-sm font-bold text-indigo-950">
-                {formattedBalance}{" "}
-                <span className="text-xs font-medium text-indigo-700">
-                  {user?.wallet?.currency}
-                </span>
+                {formattedBalance}
               </p>
             </div>
           </div>
@@ -151,11 +149,7 @@ export default function ProfilePage() {
           <ChangePasswordForm />
           <DeleteAccountSection
             email={user.email}
-            walletBalance={
-              formattedBalance && user.wallet
-                ? `${formattedBalance} ${user.wallet.currency}`
-                : null
-            }
+            walletBalance={formattedBalance}
             onAccountDeleted={() => {
               cancelPendingRefreshes();
               clearAuthSession();

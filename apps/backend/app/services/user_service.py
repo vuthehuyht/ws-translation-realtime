@@ -72,7 +72,6 @@ class UserService:
         wallet_summary = (
             WalletSummaryResponse(
                 balance=user.wallet.balance,
-                currency=user.wallet.currency,
                 auto_degrade_tts=user.wallet.auto_degrade_tts,
                 auto_topup_enabled=user.wallet.auto_topup_enabled,
             )

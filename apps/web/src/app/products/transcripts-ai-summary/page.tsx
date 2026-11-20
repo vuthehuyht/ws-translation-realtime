@@ -18,7 +18,7 @@ const TRANSCRIPT_LINES = [
     time: "08:40",
     speaker: "Dr. Alex",
     source: "Azure AI Speech in Singapore handles Vietnamese Neural TTS with under 5ms network overhead.",
-    vi: "Azure AI Speech tại Singapore xử lý giọng đọc Tiếng Việt Neural với độ trễ mạng dưới 5ms.",
+    vi: "Azure AI Speech tại Singapore xử lý giọng đọc tiếng Việt Neural với độ trễ mạng dưới 5ms.",
   },
   {
     id: "seg-3",
@@ -33,13 +33,13 @@ const TAKEAWAYS = [
   {
     segId: "seg-1",
     time: "02:15",
-    topic: "Toàn vẹn tài chính với Ví Credit 3 ngăn",
+    topic: "Toàn vẹn tài chính với ví Credit 3 ngăn",
     detail: "Trừ nguyên tử theo thứ tự Promo -> Plan -> Top-up trên PostgreSQL 16.",
   },
   {
     segId: "seg-2",
     time: "08:40",
-    topic: "Multi-Provider TTS hỗ trợ Tiếng Việt",
+    topic: "Multi-Provider TTS hỗ trợ tiếng Việt",
     detail: "Kết hợp Amazon Polly Neural và Azure AI Speech (southeastasia) cho vi-VN.",
   },
   {
@@ -67,8 +67,8 @@ export default function TranscriptsAiSummaryProductPage() {
 
   return (
     <ProductPageShell
-      badge="Biên bản & Tóm tắt AI"
-      title="Biên bản đa định dạng & Tóm tắt cuộc họp bằng AI"
+      badge="Biên bản & tóm tắt AI"
+      title="Biên bản đa định dạng & tóm tắt cuộc họp bằng AI"
       subtitle="Tự động đóng gói toàn bộ phiên dịch lên Amazon S3 (lưu 7/30/90/365 ngày theo gói) và tạo bản tóm tắt đa ngôn ngữ bằng Amazon Bedrock với cơ chế cache 0 Cr cho mọi lần xem lại."
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -115,7 +115,7 @@ export default function TranscriptsAiSummaryProductPage() {
               )}
             >
               <FileText className="h-3.5 w-3.5 text-indigo-600" />
-              <span>Toàn bộ Biên bản</span>
+              <span>Toàn bộ biên bản</span>
             </button>
           </div>
 
@@ -133,7 +133,7 @@ export default function TranscriptsAiSummaryProductPage() {
               </p>
               <p className="mt-1.5 text-sm leading-relaxed text-foreground">
                 Phiên họp chốt kiến trúc ví Credit 3 ngăn trên PostgreSQL 16, tích hợp
-                Azure AI Speech Singapore cho giọng Tiếng Việt Neural và kế hoạch kiểm
+                Azure AI Speech Singapore cho giọng tiếng Việt Neural và kế hoạch kiểm
                 thử tải 1.000 người nghe cho gói Enterprise.
               </p>
             </div>

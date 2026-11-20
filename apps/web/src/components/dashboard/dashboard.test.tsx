@@ -392,19 +392,21 @@ describe("Host Dashboard (SCR-02)", () => {
         screen.getByRole("heading", { name: /xin chào, nguyen van a/i })
       ).toBeInTheDocument();
     });
+    expect(screen.getByText("VoiceBridge AI")).toBeInTheDocument();
+    expect(screen.queryByText("Host Studio")).not.toBeInTheDocument();
 
-    expect(await screen.findByTestId("wallet-balance")).toHaveTextContent("$2.00");
+    expect(await screen.findByTestId("wallet-balance")).toHaveTextContent("200 Cr");
     expect(await screen.findByText(/đã chọn 2\/10 ngôn ngữ đích/i)).toBeInTheDocument();
 
-    // Open Top-Up modal and confirm $25 package
+    // Open Top-Up modal and confirm the 3.000 Cr pack (PACK_M)
     fireEvent.click(
       screen.getByRole("button", { name: /nạp tiền nhanh/i })
     );
-    fireEvent.click(screen.getByRole("button", { name: "$25" }));
+    fireEvent.click(screen.getByRole("button", { name: /3\.000 Cr/ }));
     fireEvent.click(
-      screen.getByRole("button", { name: /xác nhận nạp \$25\.00/i })
+      screen.getByRole("button", { name: /xác nhận nạp 3\.000 Cr/i })
     );
-    expect(screen.getByTestId("wallet-balance")).toHaveTextContent("$27.00");
+    expect(screen.getByTestId("wallet-balance")).toHaveTextContent("3.200 Cr");
 
     // Create a new room
     fireEvent.change(screen.getByLabelText(/tên phòng họp/i), {

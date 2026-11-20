@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
       {/* Left Column: Security Information */}
       <SecurityBrandHero
         icon="🔐"
-        title="Bảo mật Tài khoản Host"
+        title="Bảo mật tài khoản Host"
         description="Hệ thống sử dụng dịch vụ xác thực chuẩn AWS Cognito. Mã bảo mật 6 số sẽ được gửi trực tiếp đến hòm thư đã đăng ký của bạn."
         footerText={
           <span>

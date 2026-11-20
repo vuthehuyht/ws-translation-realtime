@@ -92,7 +92,7 @@ function ResetPasswordContent() {
       {/* Left Column: Email Verification Info */}
       <SecurityBrandHero
         icon="✉️"
-        title="Kiểm tra Hòm thư của bạn"
+        title="Kiểm tra hòm thư của bạn"
         description={
           email ? (
             <span>

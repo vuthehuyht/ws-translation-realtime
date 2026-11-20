@@ -81,7 +81,7 @@ export default function RealtimeTranslationProductPage() {
   return (
     <ProductPageShell
       badge="Phiên dịch trực tiếp"
-      title="Phiên dịch hội thoại 1-on-1 & Hội thảo đa ngôn ngữ"
+      title="Phiên dịch hội thoại 1-on-1 & hội thảo đa ngôn ngữ"
       subtitle="Chuyển đổi mượt mà giữa đàm thoại song công 2 chiều (1-on-1) và phát sóng hội trường lên đến 1.000 người nghe đồng thời với độ trễ phụ đề dưới 500ms."
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -128,7 +128,7 @@ export default function RealtimeTranslationProductPage() {
               )}
             >
               <Users className="h-3.5 w-3.5 text-indigo-600" />
-              <span>1-on-1 Song công</span>
+              <span>1-on-1 song công</span>
             </button>
           </div>
 

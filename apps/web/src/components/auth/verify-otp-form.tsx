@@ -143,7 +143,7 @@ export function VerifyOtpForm({
             Kích hoạt tài khoản thành công!
           </h2>
           <p className="text-sm text-muted-foreground">
-            Tài khoản và Ví Host của bạn đã sẵn sàng. Đang chuyển sang trang đăng nhập...
+            Tài khoản và ví Host của bạn đã sẵn sàng. Đang chuyển sang trang đăng nhập...
           </p>
         </div>
         <Link

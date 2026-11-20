@@ -180,8 +180,7 @@ Cơ sở dữ liệu chính của hệ thống là **PostgreSQL 16**, kết nố
 3. **Bảng `wallets`** (`app/models/wallet.py`):
    - `id`: `UUID` Primary Key
    - `host_id`: `VARCHAR(64)` UNIQUE NOT NULL (FK $\rightarrow$ `users.id` ON DELETE CASCADE)
-   - `balance`: `NUMERIC(12, 4)` NOT NULL DEFAULT `0.0000`
-   - `currency`: `VARCHAR(8)` NOT NULL DEFAULT `'USD'`
+   - `balance`: `NUMERIC(12, 4)` NOT NULL DEFAULT `0.0000` *(đơn vị **Credit**; không còn cột `currency`)*
    - `auto_degrade_tts`: `BOOLEAN` NOT NULL DEFAULT `TRUE`
    - `auto_topup_enabled`: `BOOLEAN` NOT NULL DEFAULT `FALSE`
    - `auto_topup_threshold`: `NUMERIC(12, 4)` NULL
@@ -195,8 +194,7 @@ Cơ sở dữ liệu chính của hệ thống là **PostgreSQL 16**, kết nố
    - `transaction_id`: `VARCHAR(128)` UNIQUE NOT NULL (Indexed — bảo đảm Idempotency cho Stripe/VietQR/Welcome Bonus)
    - `type`: `VARCHAR(32)` NOT NULL (Indexed — `TOP_UP` | `AUTO_TOP_UP` | `PROMO_CREDIT` | `USAGE_DEDUCTION` | `REFUND` | `ADMIN_ADJUSTMENT`)
    - `provider`: `VARCHAR(32)` NOT NULL (`STRIPE` | `VIETQR` | `VNPAY` | `SYSTEM` | `INTERNAL`)
-   - `amount`: `NUMERIC(12, 4)` NOT NULL
-   - `currency`: `VARCHAR(8)` NOT NULL DEFAULT `'USD'`
+   - `amount`: `NUMERIC(12, 4)` NOT NULL *(số **Credit** có dấu: cộng = nạp/tặng, trừ = sử dụng; không còn cột `currency`)*
    - `status`: `VARCHAR(32)` NOT NULL DEFAULT `'PENDING'` (Indexed — `PENDING` | `SUCCEEDED` | `FAILED`)
    - `metadata_json`: `JSON` NOT NULL DEFAULT `'{}'`
    - `created_at` / `completed_at`: `TIMESTAMPTZ`

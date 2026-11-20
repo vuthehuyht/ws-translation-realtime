@@ -30,7 +30,7 @@ async def test_wallet_repository_balance_atomic_updates(db_session: AsyncSession
     assert updated.balance == Decimal("12.2500")
 
     # Overdraft rejected when allow_negative=False
-    with pytest.raises(PaymentRequiredException, match="Insufficient funds"):
+    with pytest.raises(PaymentRequiredException, match="Insufficient credits"):
         await repo.update_balance_atomic(host_id=host_id, amount_delta=Decimal("-20.0000"))
 
     # Non-existent host raises NotFoundException
@@ -54,7 +54,6 @@ async def test_wallet_repository_transactions_and_promo(db_session: AsyncSession
         type="TOP_UP",
         provider="STRIPE",
         amount=Decimal("50.0000"),
-        currency="USD",
         status="SUCCEEDED",
     )
     saved_tx = await repo.create_transaction(tx)

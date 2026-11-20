@@ -31,8 +31,7 @@ const sampleUserMe: UserMe = {
     subtitleMode: "bilingual",
   },
   wallet: {
-    balance: "2.0000",
-    currency: "USD",
+    balance: "200.0000",
     autoDegradeTts: true,
     autoTopupEnabled: false,
   },
@@ -94,7 +93,7 @@ describe("Profile Page (/dashboard/profile)", () => {
 
     const nameInput = await screen.findByLabelText("Họ và tên");
     expect(nameInput).toHaveValue("Nguyen Van A");
-    expect(screen.getByText("$2.00")).toBeInTheDocument();
+    expect(screen.getByText("200 Cr")).toBeInTheDocument();
 
     fireEvent.change(nameInput, { target: { value: "Nguyen Van B" } });
     fireEvent.click(screen.getByRole("button", { name: /Lưu thông tin$/i }));

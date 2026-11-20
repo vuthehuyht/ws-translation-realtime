@@ -59,7 +59,7 @@
   - Mở một Transaction PostgreSQL duy nhất (`ACID`):
     1. Kiểm tra bảng `users`: Nếu chưa có, tạo bản ghi `users (id = cognito_sub, email = email, role = 'HOST', status = 'ACTIVE')`.
     2. Tạo bản ghi `user_profiles (user_id = users.id, full_name = fullName, timezone = 'Asia/Ho_Chi_Minh', default_source_lang = 'vi-VN', default_target_langs = '["en-US"]')`.
-    3. Tạo bản ghi `wallets (host_id = users.id, balance = 2.0000, currency = 'USD', auto_degrade_tts = true, auto_topup_enabled = false)` (Tặng $2.00 Welcome Bonus dùng thử).
+    3. Tạo bản ghi `wallets (host_id = users.id, balance = 200.0000, auto_degrade_tts = true, auto_topup_enabled = false)` (Tặng 200 Cr Welcome Bonus dùng thử).
     4. Ghi một bản ghi vào `payment_transactions (host_id = users.id, transaction_id = 'welcome_' + sub, type = 'PROMO_CREDIT', provider = 'SYSTEM', amount = 2.00, status = 'SUCCEEDED')`.
   - Cam kết tính bất biến (Idempotent): Nếu user gửi mã OTP lần 2 hoặc trigger bị gọi lặp lại, không xảy ra duplicate key error.
 - **Luồng xử lý (Flow)**:
@@ -72,7 +72,7 @@
   - Input: `{"email": "host@domain.com", "otpCode": "123456"}`
   - Output: `{"status": "CONFIRMED"}`
 - **Bảng DB tác động**: `users`, `user_profiles`, `wallets`, `payment_transactions`.
-- **Tiêu chí nghiệm thu (AC)**: 100% tài khoản xác thực OTP thành công đều có bản ghi `wallets` với số dư `$2.00`.
+- **Tiêu chí nghiệm thu (AC)**: 100% tài khoản xác thực OTP thành công đều có bản ghi `wallets` với số dư `200 Cr`.
 
 ### `TASK-AUTH-03`: Gửi lại mã OTP kích hoạt (Resend OTP) `[DONE]`
 - **Mã chức năng**: `FR-101.3` | **Scope**: `Backend API`
@@ -111,7 +111,7 @@
   - Nhận `authCode` sau khi người dùng redirect từ Google OAuth2 qua Cognito Domain.
   - Backend đổi `authCode` lấy token từ Cognito OAuth2 token endpoint (`/oauth2/token`).
   - Lấy thông tin user (email, google_sub, name, picture).
-  - Nếu là lần đầu đăng nhập qua Google: Tự động tạo bản ghi `users`, `user_profiles` (lưu `avatar_url` từ Google), và `wallets` (cộng $2.00 dùng thử).
+  - Nếu là lần đầu đăng nhập qua Google: Tự động tạo bản ghi `users`, `user_profiles` (lưu `avatar_url` từ Google), và `wallets` (cộng 200 Cr dùng thử).
   - Nếu đã tồn tại: Cập nhật trạng thái và trả về JWT.
 - **Tiêu chí nghiệm thu (AC)**: Đăng nhập Google 1 chạm thành công; tự động tạo ví cho user Google mới.
 
@@ -180,7 +180,7 @@
 - **Nghiệp vụ chi tiết**:
   - Endpoint `GET /api/v1/users/me`.
   - Join dữ liệu từ 3 bảng: `users`, `user_profiles`, `wallets`.
-  - Trả về: `id`, `email`, `fullName`, `phoneNumber`, `avatarUrl`, `timezone`, `defaultSourceLang`, `defaultTargetLangs`, `companyName`, `taxCode`, `companyAddress`, `wallet: { balance, currency, autoDegradeTts, autoTopupEnabled }`.
+  - Trả về: `id`, `email`, `fullName`, `phoneNumber`, `avatarUrl`, `timezone`, `defaultSourceLang`, `defaultTargetLangs`, `companyName`, `taxCode`, `companyAddress`, `wallet: { balance, autoDegradeTts, autoTopupEnabled }`.
 - **Tiêu chí nghiệm thu (AC)**: Trả về đầy đủ profile trong `< 50ms`.
 
 ### `TASK-PROF-02`: Cập nhật thông tin cơ bản người dùng
@@ -921,14 +921,14 @@
   - Đọc `master.json` từ S3, gọi Bedrock (`Claude 3.5 Haiku` / `Nova Lite`), trừ Credit 1 lần qua thứ tự 3 ngăn `Promo -> Plan -> Top-up` + ghi `credit_ledger (AI_SUMMARY)`, lưu `summary.json` lên S3 và gửi SES notification khi xong.
 - **Tiêu chí nghiệm thu (AC)**: Sinh tóm tắt cuộc họp 1 giờ `< 8s`; các lần xem lại sau = `0 Cr`.
 
-### `TASK-TRN-08`: Cơ chế Cache $0 cho Bản Tóm tắt AI đã Tạo
+### `TASK-TRN-08`: Cơ chế Cache 0 Cr cho Bản Tóm tắt AI đã Tạo
 - **Mã chức năng**: `FR-407.2` | **Scope**: `Backend Services`
 - **Nghiệp vụ chi tiết**:
   - Khi Host bấm lại nút "Tóm tắt AI" hoặc khi người dùng xem lại tóm tắt:
     - Kiểm tra `room_transcripts.summary_status == 'READY'`.
     - Trả về ngay nội dung từ file S3 `summary.json`.
-    - **Chi phí bằng $0**: Tuyệt đối không gọi lại Bedrock, không trừ thêm bất kỳ đồng nào trong ví của Host.
-- **Tiêu chí nghiệm thu (AC)**: Lần xem thứ 2 trở đi phản hồi trong $< 50ms$ với chi phí `$0.00`.
+    - **Chi phí bằng 0 Cr**: Tuyệt đối không gọi lại Bedrock, không trừ thêm bất kỳ đồng nào trong ví của Host.
+- **Tiêu chí nghiệm thu (AC)**: Lần xem thứ 2 trở đi phản hồi trong $< 50ms$ với chi phí `0 Cr`.
 
 ### `TASK-TRN-09`: Tự động Dịch Bản Tóm tắt sang Toàn bộ Ngôn ngữ Đích
 - **Mã chức năng**: `FR-407.3` | **Scope**: `Backend AI Services`

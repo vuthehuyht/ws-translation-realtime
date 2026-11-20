@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import dynamic from "next/dynamic";
 import type { CreateRoomFormPayload } from "@/components/dashboard/create-room-card";
+import { formatCredits } from "@/lib/utils";
 import { useDashboardSession } from "@/components/dashboard/dashboard-session-context";
 import {
   CreateRoomCardSkeleton,
@@ -39,7 +40,7 @@ const INITIAL_PREVIEW_ROOMS: RecentRoomItem[] = [
     langs: "EN -> VI",
     status: "LIVE",
     duration: "12m 00s",
-    cost: "$0.90",
+    cost: "90 Cr",
   },
   {
     id: "rm-8492",
@@ -49,7 +50,7 @@ const INITIAL_PREVIEW_ROOMS: RecentRoomItem[] = [
     langs: "VI -> EN, JA, KO (+2)",
     status: "ENDED",
     duration: "45m 10s",
-    cost: "$6.78",
+    cost: "678 Cr",
   },
 ];
 
@@ -58,19 +59,19 @@ export default function DashboardPage() {
   const displayName =
     session?.user.fullName?.trim() || session?.user.email || "Host";
 
-  const [balance, setBalance] = useState<number>(2.0);
+  const [balance, setBalance] = useState<number>(200);
   const [autoTopUp, setAutoTopUp] = useState<boolean>(true);
   const [rooms, setRooms] = useState<RecentRoomItem[]>(INITIAL_PREVIEW_ROOMS);
   const [notice, setNotice] = useState<string | null>(null);
 
   const handleTopUpConfirm = (
-    amountUsd: number,
+    credits: number,
     method: "stripe" | "vietqr"
   ) => {
-    setBalance((prev) => prev + amountUsd);
+    setBalance((prev) => prev + credits);
     const providerLabel = method === "stripe" ? "Stripe" : "VietQR";
     setNotice(
-      `Đã ghi nhận yêu cầu nạp +$${amountUsd.toFixed(2)} qua ${providerLabel} (UI preview, sẽ kết nối Wallet API ở task tiếp theo).`
+      `Đã ghi nhận yêu cầu nạp +${formatCredits(credits)} qua ${providerLabel} (UI preview, sẽ kết nối Wallet API ở task tiếp theo).`
     );
   };
 
@@ -101,7 +102,7 @@ export default function DashboardPage() {
       langs: `${sourceShort} -> ${targetPreview}${extraCount}`,
       status: "LIVE",
       duration: "00m 00s",
-      cost: "$0.00",
+      cost: "0 Cr",
     };
 
     setRooms((prev) => [newRoom, ...prev]);
@@ -114,7 +115,7 @@ export default function DashboardPage() {
     setNotice(
       room.status === "LIVE"
         ? `Màn hình Live Host Studio cho phòng #${room.code} đang được phát triển.`
-        : `Màn hình Lịch sử & Tóm tắt AI cho phòng #${room.code} đang được phát triển.`
+        : `Màn hình lịch sử & tóm tắt AI cho phòng #${room.code} đang được phát triển.`
     );
   };
 
@@ -166,7 +167,7 @@ export default function DashboardPage() {
             onToggleAutoTopUp={handleToggleAutoTopUp}
             onTopUpConfirm={handleTopUpConfirm}
             onViewBilling={() =>
-              setNotice("Màn hình Lịch sử giao dịch & Hóa đơn đang được phát triển.")
+              setNotice("Màn hình lịch sử giao dịch & hóa đơn đang được phát triển.")
             }
           />
         </div>

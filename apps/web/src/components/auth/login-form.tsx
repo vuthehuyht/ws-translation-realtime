@@ -144,7 +144,7 @@ export function LoginForm({
       <div className="relative flex items-center justify-center">
         <div className="w-full border-t border-border" />
         <span className="absolute bg-card px-3 text-xs uppercase tracking-wider text-muted-foreground">
-          Hoặc đăng nhập với Email
+          Hoặc đăng nhập với email
         </span>
       </div>
 
@@ -156,7 +156,7 @@ export function LoginForm({
             htmlFor="email"
             className="block text-xs font-semibold text-foreground"
           >
-            Địa chỉ Email
+            Địa chỉ email
           </label>
           <input
             id="email"
@@ -258,7 +258,7 @@ export function LoginForm({
           {isLoading ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
-            "Đăng nhập vào Hệ thống"
+            "Đăng nhập vào hệ thống"
           )}
         </button>
       </form>

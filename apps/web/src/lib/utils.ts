@@ -9,6 +9,14 @@ export function cn(...inputs: ClassValue[]): string {
 }
 
 /**
+ * Formats a wallet amount in Credits (e.g. 1800 -> "1.800 Cr"). Wallet amounts are
+ * always Credits; USD/VND only appear as the payment price of a top-up.
+ */
+export function formatCredits(amount: number): string {
+  return `${new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 2 }).format(amount)} Cr`;
+}
+
+/**
  * Formats a currency amount into USD ($48.50) or VND (1,235,000 ₫)
  */
 export function formatCurrency(amount: number, currency: "USD" | "VND" = "USD"): string {

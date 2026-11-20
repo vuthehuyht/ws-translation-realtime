@@ -109,7 +109,7 @@ describe("Full Registration Flow (RegisterPage -> VerifyOtpPage)", () => {
       expect.objectContaining({ method: "POST" })
     );
 
-    // Step 3: Paste 6-digit OTP -> auto confirm -> $2.00 Welcome Bonus -> redirect to /login
+    // Step 3: Paste 6-digit OTP -> auto confirm -> 200 Cr Welcome Bonus -> redirect to /login
     await act(async () => {
       fireEvent.paste(screen.getByLabelText("Mã OTP số 1"), {
         clipboardData: { getData: () => "123456" },

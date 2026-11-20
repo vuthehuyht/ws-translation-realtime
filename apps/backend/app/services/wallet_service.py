@@ -62,7 +62,6 @@ class WalletService:
             type="TOP_UP",
             provider=provider,
             amount=amount,
-            currency="USD",
             status="SUCCEEDED",
             metadata_json=metadata or {},
         )
@@ -99,7 +98,6 @@ class WalletService:
             type="USAGE_DEDUCTION",
             provider="INTERNAL",
             amount=-cost,
-            currency="USD",
             status="SUCCEEDED",
             metadata_json={"roomId": room_id, "intervalIndex": interval_index},
         )

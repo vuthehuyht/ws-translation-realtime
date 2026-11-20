@@ -78,20 +78,20 @@ async def test_auth_service_registration_and_confirmation_lifecycle(
     assert confirm_res.status == "CONFIRMED"
     assert confirm_res.model_dump() == {"status": "CONFIRMED"}
 
-    # User in DB should now be ACTIVE, Wallet initialized ($2.00 Welcome Bonus), and Ledger recorded
+    # User in DB should now be ACTIVE, Wallet seeded with 200 Cr welcome bonus, Ledger recorded
     user = await user_repo.get_by_email("host.new@example.com")
     assert user is not None
     assert user.status == "ACTIVE"
 
     wallet = await wallet_repo.get_by_host_id(user.id)
     assert wallet is not None
-    assert wallet.balance == Decimal("2.0000")
+    assert wallet.balance == Decimal("200.0000")
 
     welcome_tx = await wallet_repo.get_transaction_by_provider_id(f"welcome_{user.id}")
     assert welcome_tx is not None
     assert welcome_tx.type == "PROMO_CREDIT"
     assert welcome_tx.provider == "SYSTEM"
-    assert welcome_tx.amount == Decimal("2.0000")
+    assert welcome_tx.amount == Decimal("200.0000")
     assert welcome_tx.status == "SUCCEEDED"
 
     # Idempotent confirmation with valid code succeeds without double-crediting Welcome Bonus
@@ -99,7 +99,7 @@ async def test_auth_service_registration_and_confirmation_lifecycle(
     assert second_confirm.status == "CONFIRMED"
     wallet_after = await wallet_repo.get_by_host_id(user.id)
     assert wallet_after is not None
-    assert wallet_after.balance == Decimal("2.0000")
+    assert wallet_after.balance == Decimal("200.0000")
 
     # 4. Login after confirmation
     login_req = LoginRequest(

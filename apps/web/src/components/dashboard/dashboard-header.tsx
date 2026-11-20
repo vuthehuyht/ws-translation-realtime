@@ -102,14 +102,9 @@ export function DashboardHeader({
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-indigo-700 text-white shadow-sm shadow-indigo-600/25">
             <AudioWaveform className="h-5 w-5" />
           </div>
-          <div className="hidden sm:block">
-            <p className="text-sm font-bold tracking-tight text-foreground">
-              VoiceBridge AI
-            </p>
-            <p className="text-[11px] font-medium text-muted-foreground">
-              Host Studio
-            </p>
-          </div>
+          <span className="hidden text-sm font-bold tracking-tight text-foreground sm:inline">
+            VoiceBridge AI
+          </span>
         </Link>
 
         <div ref={menuContainerRef} className="relative flex items-center gap-3">
@@ -196,12 +191,12 @@ export function DashboardHeader({
                   type="button"
                   role="menuitem"
                   disabled
-                  title="Trang Thanh toán & Gói Credit đang được phát triển"
+                  title="Trang thanh toán & gói Credit đang được phát triển"
                   className="flex w-full cursor-not-allowed items-center justify-between rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground/70"
                 >
                   <span className="inline-flex items-center gap-2">
                     <CreditCard className="h-3.5 w-3.5" />
-                    <span>Thanh toán &amp; Gói Credit</span>
+                    <span>Thanh toán &amp; gói Credit</span>
                   </span>
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                     Sắp ra mắt

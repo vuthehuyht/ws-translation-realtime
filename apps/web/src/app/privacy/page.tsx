@@ -19,31 +19,31 @@ const SECTIONS = [
     ],
   },
   {
-    title: "2. Cách xử lý âm thanh & Nhà cung cấp AI",
+    title: "2. Cách xử lý âm thanh & nhà cung cấp AI",
     points: [
       "Luồng âm thanh được mã hóa truyền tải qua HTTPS/WSS (TLS) và chỉ đệm tạm thời tối đa 10 giây trên Redis nội bộ vùng Singapore (AWS ap-southeast-1) nhằm đảm bảo không mất chữ khi chuyển đổi máy chủ.",
       "Dữ liệu giọng nói và văn bản được xử lý thời gian thực qua Amazon Transcribe, Amazon Translate, Amazon Polly, Amazon Bedrock và Azure AI Speech (vùng Singapore southeastasia cho tiếng Việt) để trả kết quả dịch trực tiếp.",
     ],
   },
   {
-    title: "3. Thời gian lưu trữ & Tự động xóa dữ liệu",
+    title: "3. Thời gian lưu trữ & tự động xóa dữ liệu",
     points: [
       "File âm thanh giọng đọc AI (TTS .mp3): chỉ phục vụ phát trực tiếp trong phiên và tự động xóa vĩnh viễn khỏi Amazon S3 sau 24 giờ.",
-      "Biên bản bản dịch & Tóm tắt AI trên S3: được lưu theo thời hạn gói dịch vụ tại thời điểm kết thúc phòng (FREE: 7 ngày, PRO: 30 ngày, BUSINESS: 90 ngày, ENTERPRISE: 365 ngày) và tự động xóa khi hết hạn.",
+      "Biên bản bản dịch & tóm tắt AI trên S3: được lưu theo thời hạn gói dịch vụ tại thời điểm kết thúc phòng (FREE: 7 ngày, PRO: 30 ngày, BUSINESS: 90 ngày, ENTERPRISE: 365 ngày) và tự động xóa khi hết hạn.",
       "Listener chỉ được tải biên bản nếu Host chủ động bật tùy chọn cho phép tải xuống cho phòng đó.",
     ],
   },
   {
-    title: "4. Bảo mật phiên đăng nhập & Kiểm toán",
+    title: "4. Bảo mật phiên đăng nhập & kiểm toán",
     points: [
       "Xác thực Host sử dụng Amazon Cognito (JWT RS256 qua JWKS). Refresh Token chỉ lưu trong HttpOnly Cookie để bảo vệ trước tấn công XSS và hỗ trợ thu hồi tức thì trên mọi thiết bị.",
       "Mọi thao tác can thiệp quản trị hệ thống đều được ghi nhận trong nhật ký kiểm toán bất biến (Audit Logs).",
     ],
   },
   {
-    title: "5. Quyền riêng tư & Xóa dữ liệu (GDPR / PDPA)",
+    title: "5. Quyền riêng tư & xóa dữ liệu (GDPR / PDPA)",
     points: [
-      "Màn hình Người nghe luôn hiển thị thông báo minh bạch rằng phiên họp đang được dịch thuật và lưu biên bản bằng AI.",
+      "Màn hình người nghe luôn hiển thị thông báo minh bạch rằng phiên họp đang được dịch thuật và lưu biên bản bằng AI.",
       "Host có toàn quyền chủ động xóa biên bản của từng phòng bất kỳ lúc nào hoặc yêu cầu xóa tài khoản và dữ liệu cá nhân thông qua cài đặt tài khoản hoặc liên hệ support@voicebridge.ai.",
     ],
   },
@@ -85,7 +85,7 @@ export default function PrivacyPage() {
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-700">
               <Lock className="h-3.5 w-3.5" />
-              <span>Bảo mật &amp; Quyền riêng tư</span>
+              <span>Bảo mật &amp; quyền riêng tư</span>
             </span>
             <span className="text-xs text-muted-foreground">
               Cập nhật lần cuối: 19/11/2026

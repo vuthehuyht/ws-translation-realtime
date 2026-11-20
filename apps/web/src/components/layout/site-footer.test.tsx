@@ -14,10 +14,10 @@ describe("SiteFooter", () => {
       screen.getByRole("link", { name: "Phiên dịch trực tiếp" })
     ).toHaveAttribute("href", "/products/realtime-translation");
     expect(
-      screen.getByRole("link", { name: "Bảng giá & Gói cước" })
+      screen.getByRole("link", { name: "Bảng giá & gói cước" })
     ).toHaveAttribute("href", "/pricing");
     expect(
-      screen.getByRole("link", { name: "Biên bản & Tóm tắt AI" })
+      screen.getByRole("link", { name: "Biên bản & tóm tắt AI" })
     ).toHaveAttribute("href", "/products/transcripts-ai-summary");
     expect(
       screen.getByRole("link", { name: "Từ điển thuật ngữ" })

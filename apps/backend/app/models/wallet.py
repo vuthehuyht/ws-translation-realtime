@@ -45,12 +45,12 @@ class Wallet(Base, TimestampMixin):
         index=True,
         nullable=False,
     )
+    # All wallet amounts are denominated in Credits (1 USD = 100 Credits at purchase time).
     balance: Mapped[Decimal] = mapped_column(
         Numeric(12, 4),
         default=Decimal("0.0000"),
         nullable=False,
     )
-    currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
     auto_degrade_tts: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     auto_topup_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     auto_topup_threshold: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
@@ -85,8 +85,8 @@ class PaymentTransaction(Base):
     )
     type: Mapped[str] = mapped_column(String(32), index=True, nullable=False)
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    # Signed Credit delta applied to the wallet (positive = credit, negative = deduction).
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
-    currency: Mapped[str] = mapped_column(String(8), default="USD", nullable=False)
     status: Mapped[str] = mapped_column(String(32), default="PENDING", index=True, nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

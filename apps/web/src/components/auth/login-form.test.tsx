@@ -103,7 +103,7 @@ describe("LoginForm component", () => {
       screen.getByText("Email hoặc mật khẩu không chính xác.")
     ).toBeInTheDocument();
     expect(screen.getByText("Tài khoản đã xác thực.")).toBeInTheDocument();
-    expect(screen.getByLabelText("Địa chỉ Email")).toHaveValue("prefilled@example.com");
+    expect(screen.getByLabelText("Địa chỉ email")).toHaveValue("prefilled@example.com");
   });
 
   it("shows coming soon notice when clicking Social SSO buttons", () => {

@@ -25,8 +25,7 @@ const sampleUserMe: UserMe = {
     subtitleMode: "bilingual",
   },
   wallet: {
-    balance: "2.0000",
-    currency: "USD",
+    balance: "200.0000",
     autoDegradeTts: true,
     autoTopupEnabled: false,
   },

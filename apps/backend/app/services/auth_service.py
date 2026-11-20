@@ -52,7 +52,7 @@ from app.schemas.responses import (
 )
 from app.services import token_blocklist
 
-WELCOME_BONUS_AMOUNT = Decimal("2.0000")
+WELCOME_BONUS_AMOUNT = Decimal("200.0000")  # Credits
 RESEND_OTP_COOLDOWN_SECONDS = 60
 FORGOT_PASSWORD_MAX_ATTEMPTS = 3
 FORGOT_PASSWORD_WINDOW_SECONDS = 900
@@ -196,7 +196,6 @@ class AuthService:
                     wallet = Wallet(
                         host_id=user_sub,
                         balance=initial_balance,
-                        currency="USD",
                         auto_degrade_tts=True,
                         auto_topup_enabled=False,
                     )
@@ -218,7 +217,6 @@ class AuthService:
                             type="PROMO_CREDIT",
                             provider="SYSTEM",
                             amount=WELCOME_BONUS_AMOUNT,
-                            currency="USD",
                             status="SUCCEEDED",
                             metadata_json={"reason": "welcome_bonus"},
                             completed_at=datetime.now(UTC),

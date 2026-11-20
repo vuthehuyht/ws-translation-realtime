@@ -63,7 +63,7 @@ export function BillingInfoForm({ user, onUpdated }: BillingInfoFormProps) {
         </div>
         <div>
           <h2 className="text-base font-semibold text-foreground">
-            Thông tin doanh nghiệp &amp; Hóa đơn VAT
+            Thông tin doanh nghiệp &amp; hóa đơn VAT
           </h2>
           <p className="text-xs text-muted-foreground">
             Tự động gắn vào biên lai thanh toán PDF khi nạp tiền hoặc gia hạn gói.

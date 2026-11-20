@@ -22,7 +22,7 @@ export function AudioTechHero({
   const isRegister = variant === "register" || showTrialCard;
 
   const resolvedBadge =
-    badgeText ?? (isRegister ? "Tài khoản Host Miễn Phí" : "AWS Realtime Speech Pipeline");
+    badgeText ?? (isRegister ? "Tài khoản Host miễn phí" : "AWS Realtime Speech Pipeline");
 
   const resolvedTitle =
     title ??
@@ -155,7 +155,7 @@ export function AudioTechHero({
             <div>
               <div className="flex items-center justify-center gap-1 text-base font-bold text-emerald-400">
                 <DollarSign className="h-3.5 w-3.5" />
-                <span>$0 Idle</span>
+                <span>0 Cr Idle</span>
               </div>
               <div className="text-[11px] text-slate-400">Không tốn phí khi chờ</div>
             </div>
