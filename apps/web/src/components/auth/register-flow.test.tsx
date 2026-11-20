@@ -68,6 +68,9 @@ describe("Full Registration Flow (RegisterPage -> VerifyOtpPage)", () => {
     fireEvent.change(screen.getByLabelText(/^Mật khẩu/i), {
       target: { value: "StrongPass123!" },
     });
+    fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/i), {
+      target: { value: "StrongPass123!" },
+    });
     fireEvent.click(
       screen.getByRole("checkbox", { name: /Điều khoản Dịch vụ/i })
     );
@@ -159,6 +162,9 @@ describe("Full Registration Flow (RegisterPage -> VerifyOtpPage)", () => {
       target: { value: "existing@example.com" },
     });
     fireEvent.change(screen.getByLabelText(/^Mật khẩu/i), {
+      target: { value: "StrongPass123!" },
+    });
+    fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/i), {
       target: { value: "StrongPass123!" },
     });
     fireEvent.click(

@@ -21,17 +21,28 @@ export function calculatePasswordStrength(password: string): PasswordStrengthRes
 
   let points = 0;
 
-  // Length checks
+  // Length & complexity checks aligned with backend & Cognito password policy
+  const hasLower = /[a-z]/.test(password);
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLetters = hasLower || hasUpper;
+  const hasNumbers = /[0-9]/.test(password);
+  const hasSpecial = /[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/']/.test(password);
+  const isAsciiWithoutEdgeSpaces =
+    password === password.trim() && /^[\x20-\x7E]+$/.test(password);
+
   if (password.length >= 6) points += 1;
   if (password.length >= 8) points += 1;
-
-  // Complexity checks
-  const hasLetters = /[a-zA-Z]/.test(password);
-  const hasNumbers = /[0-9]/.test(password);
-  const hasSpecial = /[^a-zA-Z0-9]/.test(password);
-
   if (hasLetters && hasNumbers) points += 1;
-  if (hasSpecial && password.length >= 8) points += 1;
+  if (
+    password.length >= 8 &&
+    hasLower &&
+    hasUpper &&
+    hasNumbers &&
+    hasSpecial &&
+    isAsciiWithoutEdgeSpaces
+  ) {
+    points += 1;
+  }
 
   // Clamp points to 1..4 when password is not empty
   const score = Math.min(Math.max(points, 1), 4);

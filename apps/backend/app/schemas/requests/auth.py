@@ -10,13 +10,17 @@ EMAIL_REGEX = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
 
 def _validate_password_complexity(v: str) -> str:
     """Validate password complexity; minimum length is enforced by Field(min_length=8)."""
+    if v != v.strip():
+        raise ValueError("Password must not start or end with spaces")
+    if not re.fullmatch(r"[\x20-\x7E]+", v):
+        raise ValueError("Password must contain only standard ASCII characters")
     if not re.search(r"[A-Z]", v):
         raise ValueError("Password must contain at least one uppercase letter")
     if not re.search(r"[a-z]", v):
         raise ValueError("Password must contain at least one lowercase letter")
     if not re.search(r"[0-9]", v):
         raise ValueError("Password must contain at least one number")
-    if not re.search(r'[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/]', v):
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/\']', v):
         raise ValueError("Password must contain at least one special character")
     return v
 

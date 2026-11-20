@@ -24,6 +24,16 @@ export function ChangePasswordForm() {
       setError("Vui lòng nhập mật khẩu hiện tại.");
       return;
     }
+    if (newPassword !== newPassword.trim()) {
+      setError("Mật khẩu mới không được chứa khoảng trắng ở đầu hoặc cuối.");
+      return;
+    }
+    if (!/^[\x20-\x7E]+$/.test(newPassword)) {
+      setError(
+        "Mật khẩu mới chỉ được dùng ký tự không dấu (tắt bộ gõ tiếng Việt khi nhập)."
+      );
+      return;
+    }
     if (newPassword.length < 8) {
       setError("Mật khẩu mới phải có tối thiểu 8 ký tự.");
       return;
@@ -32,7 +42,7 @@ export function ChangePasswordForm() {
       !/[A-Z]/.test(newPassword) ||
       !/[a-z]/.test(newPassword) ||
       !/[0-9]/.test(newPassword) ||
-      !/[^a-zA-Z0-9]/.test(newPassword)
+      !/[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/']/.test(newPassword)
     ) {
       setError(
         "Mật khẩu mới cần có ít nhất 1 chữ hoa, 1 chữ thường, 1 chữ số và 1 ký tự đặc biệt."
