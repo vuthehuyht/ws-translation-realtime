@@ -441,6 +441,7 @@ class AuthService:
             role=user.role,
             status=user.status,
             full_name=profile_data.full_name if profile_data else None,
+            avatar_url=profile_data.avatar_url if profile_data else None,
             default_source_lang=profile_data.default_source_lang if profile_data else "vi-VN",
             default_target_langs=profile_data.default_target_langs if profile_data else [],
             timezone=profile_data.timezone if profile_data else "Asia/Ho_Chi_Minh",

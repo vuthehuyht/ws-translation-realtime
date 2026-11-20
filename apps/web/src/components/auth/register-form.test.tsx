@@ -8,6 +8,7 @@ describe("RegisterForm component", () => {
     expect(screen.getByLabelText(/Họ và tên/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Địa chỉ Email/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^Mật khẩu/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Xác nhận mật khẩu/i)).toBeInTheDocument();
     expect(
       screen.getByRole("checkbox", { name: /Điều khoản Dịch vụ/i })
     ).toBeInTheDocument();
@@ -100,6 +101,9 @@ describe("RegisterForm component", () => {
     fireEvent.change(screen.getByLabelText(/^Mật khẩu/i), {
       target: { value: "P@ssword2026!" },
     });
+    fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/i), {
+      target: { value: "P@ssword2026!" },
+    });
     fireEvent.click(
       screen.getByRole("checkbox", { name: /Điều khoản Dịch vụ/i })
     );
@@ -149,6 +153,35 @@ describe("RegisterForm component", () => {
     expect(
       await screen.findByText(/Mật khẩu cần gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt/i)
     ).toBeInTheDocument();
+    expect(handleSuccess).not.toHaveBeenCalled();
+  });
+
+  it("rejects mismatched confirm password and accented non-ASCII passwords", async () => {
+    const handleSuccess = vi.fn();
+    render(<RegisterForm onSubmitSuccess={handleSuccess} />);
+
+    fireEvent.change(screen.getByLabelText(/Họ và tên/i), {
+      target: { value: "Nguyen Van A" },
+    });
+    fireEvent.change(screen.getByLabelText(/Địa chỉ Email/i), {
+      target: { value: "host@example.com" },
+    });
+    fireEvent.change(screen.getByLabelText(/^Mật khẩu/i), {
+      target: { value: "MậtKhẩu123!" },
+    });
+    fireEvent.change(screen.getByLabelText(/Xác nhận mật khẩu/i), {
+      target: { value: "OtherPass123!" },
+    });
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: /Điều khoản Dịch vụ/i })
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Tạo tài khoản" }));
+
+    expect(
+      await screen.findByText(/Mật khẩu chỉ được dùng ký tự không dấu/i)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Mật khẩu xác nhận không khớp/i)).toBeInTheDocument();
     expect(handleSuccess).not.toHaveBeenCalled();
   });
 });

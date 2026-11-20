@@ -32,6 +32,11 @@ describe("calculatePasswordStrength helper", () => {
     expect(result.score).toBe(4);
     expect(result.label).toBe("Mật khẩu mạnh (gồm chữ hoa, số và ký tự đặc biệt)");
   });
+
+  it("does not award score 4 when uppercase letter is missing", () => {
+    const result = calculatePasswordStrength("p@ssw0rd!2026");
+    expect(result.score).toBeLessThan(4);
+  });
 });
 
 describe("PasswordMeter component", () => {

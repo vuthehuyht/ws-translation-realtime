@@ -24,11 +24,14 @@ class UserRepository(BaseRepository[User]):
         entity_id: Any,
         *,
         include_profile: bool = False,
+        include_wallet: bool = False,
     ) -> User | None:
-        """Fetch a user by primary key, optionally eager-loading UserProfile."""
+        """Fetch a user by primary key, optionally eager-loading UserProfile and Wallet."""
         stmt = select(User).where(User.id == entity_id)
         if include_profile:
             stmt = stmt.options(selectinload(User.profile))
+        if include_wallet:
+            stmt = stmt.options(selectinload(User.wallet))
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 

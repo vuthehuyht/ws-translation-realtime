@@ -1,7 +1,8 @@
 import { getApiBaseUrl } from "./api-base";
-import type { RefreshSessionResponse } from "./auth-api";
+import type { RefreshSessionResponse, UserProfile } from "./auth-api";
 import {
   clearAuthSession,
+  getAuthSession,
   getRememberMePreference,
   saveAuthSession,
   type AuthSession,
@@ -145,4 +146,27 @@ export function silentRefreshSessionDetailed(): Promise<RefreshOutcome> {
 export function cancelPendingRefreshes(): void {
   sessionEpoch += 1;
   inFlightRefresh = null;
+}
+
+/**
+ * Merge updated user profile fields into the active session and broadcast to subscribers
+ * (e.g. DashboardHeader) without requiring a token refresh round-trip.
+ */
+export function patchAuthSessionUser(
+  partialUser: Partial<UserProfile>
+): AuthSession | null {
+  const current = getAuthSession();
+  if (!current) {
+    return null;
+  }
+  const nextSession: AuthSession = {
+    ...current,
+    user: {
+      ...current.user,
+      ...partialUser,
+    },
+  };
+  saveAuthSession(nextSession, getRememberMePreference());
+  notifyListeners(nextSession);
+  return nextSession;
 }

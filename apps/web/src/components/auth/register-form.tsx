@@ -27,9 +27,11 @@ export function RegisterForm({
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
 
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [ssoNotice, setSsoNotice] = useState<string | null>(null);
 
@@ -38,6 +40,7 @@ export function RegisterForm({
     fullName?: string;
     email?: string;
     password?: string;
+    confirmPassword?: string;
     agreeTerms?: string;
   }>({});
 
@@ -59,16 +62,27 @@ export function RegisterForm({
 
     if (!password) {
       newErrors.password = "Vui lòng nhập mật khẩu";
+    } else if (password !== password.trim()) {
+      newErrors.password = "Mật khẩu không được chứa khoảng trắng ở đầu hoặc cuối";
+    } else if (!/^[\x20-\x7E]+$/.test(password)) {
+      newErrors.password =
+        "Mật khẩu chỉ được dùng ký tự không dấu (tắt bộ gõ tiếng Việt khi nhập)";
     } else if (password.length < 8) {
       newErrors.password = "Mật khẩu phải có ít nhất 8 ký tự";
     } else if (
       !/[A-Z]/.test(password) ||
       !/[a-z]/.test(password) ||
       !/[0-9]/.test(password) ||
-      !/[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/]/.test(password)
+      !/[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/']/.test(password)
     ) {
       newErrors.password =
         "Mật khẩu cần gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt";
+    }
+
+    if (!confirmPassword) {
+      newErrors.confirmPassword = "Vui lòng nhập lại mật khẩu";
+    } else if (confirmPassword !== password) {
+      newErrors.confirmPassword = "Mật khẩu xác nhận không khớp";
     }
 
     if (!agreeTerms) {
@@ -243,6 +257,50 @@ export function RegisterForm({
           )}
           {/* Password strength meter */}
           <PasswordMeter password={password} className="pt-1" />
+        </div>
+
+        {/* Confirm Password */}
+        <div className="space-y-1.5 text-left">
+          <label
+            htmlFor="confirmPassword"
+            className="block text-xs font-semibold text-foreground"
+          >
+            Xác nhận mật khẩu
+          </label>
+          <div className="relative">
+            <input
+              id="confirmPassword"
+              name="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              autoComplete="new-password"
+              placeholder="Nhập lại mật khẩu..."
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (errors.confirmPassword) {
+                  setErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+                }
+              }}
+              className={cn(
+                "flex h-10 w-full rounded-lg border bg-background px-3.5 pr-10 py-2 text-sm text-foreground shadow-sm transition-colors",
+                "placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2",
+                errors.confirmPassword
+                  ? "border-destructive focus-visible:ring-destructive/20"
+                  : "border-border focus-visible:border-primary focus-visible:ring-primary/20"
+              )}
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label={showConfirmPassword ? "Ẩn mật khẩu xác nhận" : "Hiện mật khẩu xác nhận"}
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+          {errors.confirmPassword && (
+            <p className="text-xs font-medium text-destructive">{errors.confirmPassword}</p>
+          )}
         </div>
 
         {/* Terms Agreement Checkbox */}

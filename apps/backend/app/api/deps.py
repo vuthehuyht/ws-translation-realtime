@@ -21,6 +21,7 @@ from app.repositories.user_repository import UserRepository
 from app.repositories.wallet_repository import WalletRepository
 from app.services import token_blocklist
 from app.services.auth_service import AuthService
+from app.services.user_service import UserService
 from app.services.wallet_service import WalletService
 
 _redis_client: aioredis.Redis | None = None
@@ -94,6 +95,13 @@ def get_wallet_service(
 ) -> WalletService:
     """Provide WalletService instance wired with wallet repository."""
     return WalletService(wallet_repo=wallet_repo)
+
+
+def get_user_service(
+    user_repo: Annotated[UserRepository, Depends(get_user_repository)],
+) -> UserService:
+    """Provide UserService instance wired with user repository."""
+    return UserService(user_repo=user_repo)
 
 
 # User authentication dependencies

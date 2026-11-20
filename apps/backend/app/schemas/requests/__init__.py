@@ -9,8 +9,19 @@ from app.schemas.requests.auth import (
     ResendOtpRequest,
     ResetPasswordRequest,
 )
+from app.schemas.requests.user import (
+    AvatarConfirmRequest,
+    AvatarUploadUrlRequest,
+    ChangePasswordRequest,
+    UpdateBillingInfoRequest,
+    UpdatePreferencesRequest,
+    UpdateProfileRequest,
+)
 
 __all__ = [
+    "AvatarConfirmRequest",
+    "AvatarUploadUrlRequest",
+    "ChangePasswordRequest",
     "ConfirmRequest",
     "ForgotPasswordRequest",
     "LoginRequest",
@@ -18,4 +29,7 @@ __all__ = [
     "RegisterRequest",
     "ResendOtpRequest",
     "ResetPasswordRequest",
+    "UpdateBillingInfoRequest",
+    "UpdatePreferencesRequest",
+    "UpdateProfileRequest",
 ]

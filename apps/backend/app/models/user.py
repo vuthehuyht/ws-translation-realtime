@@ -6,7 +6,7 @@ Maps to PostgreSQL tables 'users' and 'user_profiles'.
 import uuid
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, ForeignKey, String
+from sqlalchemy import JSON, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -96,6 +96,8 @@ class UserProfile(Base, TimestampMixin):
         nullable=False,
     )
     full_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    phone_number: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    bio: Mapped[str | None] = mapped_column(Text, nullable=True)
     avatar_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     timezone: Mapped[str] = mapped_column(String(64), default="Asia/Ho_Chi_Minh", nullable=False)
     default_source_lang: Mapped[str] = mapped_column(String(16), default="vi-VN", nullable=False)

@@ -72,13 +72,18 @@ export function ResetPasswordForm({
 
     if (!password) {
       newErrors.password = "Vui lòng nhập mật khẩu mới";
+    } else if (password !== password.trim()) {
+      newErrors.password = "Mật khẩu không được chứa khoảng trắng ở đầu hoặc cuối";
+    } else if (!/^[\x20-\x7E]+$/.test(password)) {
+      newErrors.password =
+        "Mật khẩu chỉ được dùng ký tự không dấu (tắt bộ gõ tiếng Việt khi nhập)";
     } else if (password.length < 8) {
       newErrors.password = "Mật khẩu phải có ít nhất 8 ký tự";
     } else if (
       !/[A-Z]/.test(password) ||
       !/[a-z]/.test(password) ||
       !/[0-9]/.test(password) ||
-      !/[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/]/.test(password)
+      !/[!@#$%^&*(),.?":{}|<>\-_+=~`[\]\\;/']/.test(password)
     ) {
       newErrors.password =
         "Mật khẩu phải gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt";

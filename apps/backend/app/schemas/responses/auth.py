@@ -51,6 +51,7 @@ class UserProfileResponse(BaseModel):
     role: str
     status: str
     full_name: str | None = Field(default=None, alias="fullName")
+    avatar_url: str | None = Field(default=None, alias="avatarUrl")
     default_source_lang: str | None = Field(default="vi-VN", alias="defaultSourceLang")
     default_target_langs: list[str] = Field(default_factory=list, alias="defaultTargetLangs")
     timezone: str = "Asia/Ho_Chi_Minh"

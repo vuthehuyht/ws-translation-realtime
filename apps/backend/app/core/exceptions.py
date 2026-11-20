@@ -83,6 +83,20 @@ class ForbiddenException(AppException):
         )
 
 
+class BadRequestException(AppException):
+    """Malformed or invalid client request (HTTP 400)."""
+
+    def __init__(
+        self, message: str = "Bad request", details: dict[str, Any] | list[Any] | None = None
+    ) -> None:
+        super().__init__(
+            message=message,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            error_code="BAD_REQUEST",
+            details=details,
+        )
+
+
 class ValidationException(AppException):
     """Business rule or input validation error (HTTP 422)."""
 
